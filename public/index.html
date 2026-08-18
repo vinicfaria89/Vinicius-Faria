@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>GCB Simulador — Carteira Simulada</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background:#f4f2ea; color:#1f1f14; margin:0; padding:0 0 60px 0; }
+  header { background:#2c2c1a; color:#fff; padding:18px 28px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  header .logo { font-size:20px; font-weight:800; }
+  header .sub { font-size:11px; color:#a3c96b; margin-top:2px; }
+  header .manual-link {
+    display:flex; align-items:center; gap:6px; flex:none; margin-top:2px;
+    background:#3a3a24; color:#f4f2ea; text-decoration:none;
+    font-size:11.5px; font-weight:700; padding:7px 12px; border-radius:8px;
+    border:1px solid #4a4a30; white-space:nowrap;
+  }
+  header .manual-link:hover { background:#46462c; }
+  header .manual-link .ic { font-size:14px; line-height:1; }
+  header .header-actions { display:flex; gap:8px; flex:none; margin-top:2px; }
+  header .cadastrar-btn {
+    display:flex; align-items:center; gap:6px; flex:none;
+    background:#a3c96b; color:#20300f; border:1px solid #a3c96b;
+    font-size:11.5px; font-weight:700; padding:7px 12px; border-radius:8px;
+    cursor:pointer; white-space:nowrap; font-family:inherit;
+  }
+  header .cadastrar-btn:hover { background:#b3d980; }
+  header .cadastrar-btn .ic { font-size:14px; line-height:1; }
+  header .calculadora-btn {
+    display:flex; align-items:center; gap:6px; flex:none;
+    background:#3a3a24; color:#f4f2ea; border:1px solid #4a4a30;
+    font-size:11.5px; font-weight:700; padding:7px 12px; border-radius:8px;
+    cursor:pointer; white-space:nowrap; font-family:inherit;
+  }
+  header .calculadora-btn:hover { background:#46462c; }
+  header .calculadora-btn .ic { font-size:14px; line-height:1; }
+  header .novacao-btn {
+    display:flex; align-items:center; gap:6px; flex:none;
+    background:#3a3a24; color:#f4f2ea; border:1px solid #4a4a30;
+    font-size:11.5px; font-weight:700; padding:7px 12px; border-radius:8px;
+    cursor:pointer; white-space:nowrap; font-family:inherit;
+  }
+  header .novacao-btn:hover { background:#46462c; }
+  header .novacao-btn .ic { font-size:14px; line-height:1; }
+  main { max-width:960px; margin:24px auto; padding:0 20px; }
+  .card { background:#fff; border:1px solid #d8d4c4; border-radius:10px; padding:20px 22px; margin-bottom:18px; }
+  .card h2 { font-size:14px; margin:0 0 14px 0; color:#1f1f14; }
+  label { display:block; font-size:11px; font-weight:700; color:#3a3a28; margin-bottom:4px; }
+  input[type=text], input[type=date], input[type=number], select {
+    width:100%; padding:7px 8px; border:1px solid #d8d4c4; border-radius:6px; font-size:12.5px; font-family:inherit;
+  }
+  .campo-erro { border:1.5px solid #c0392b !important; background:#fdf0ee; box-shadow:0 0 0 2px rgba(192,57,43,0.15); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+  .grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; }
+  table#ativosTable { width:100%; border-collapse:collapse; font-size:11.5px; margin-top:10px; }
+  table#ativosTable th { text-align:left; font-size:10px; color:#5a5847; padding:4px 6px; border-bottom:1px solid #d8d4c4; }
+  table#ativosTable td { padding:4px 6px; vertical-align:top; }
+  table#ativosTable td input, table#ativosTable td select { font-size:11px; padding:5px 6px; }
+  .btn { background:#2c2c1a; color:#fff; border:none; border-radius:6px; padding:9px 16px; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#3a3a24; }
+  .btn.secondary { background:#efece2; color:#1f1f14; }
+  .btn.small { padding:5px 10px; font-size:11px; }
+  .btn.danger { background:#8a4a4a; }
+  .row-actions { display:flex; gap:8px; margin-top:12px; }
+  .field-inline { display:flex; align-items:center; gap:5px; font-size:10.5px; white-space:nowrap; }
+  .nov-posicao-card { background:#faf9f4; border:1px solid #e2ded0; border-radius:10px; padding:14px 16px; margin-top:10px; }
+  .nov-posicao-card + .nov-posicao-card { margin-top:12px; }
+  .nov-posicao-card .cabecalho { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .nov-posicao-card .cabecalho strong { font-size:11.5px; color:#1f1f14; }
+  .nov-posicao-card .sub-titulo { font-weight:700; font-size:10.5px; color:#5a5847; margin:0 0 6px; display:block; }
+  .nov-sugerida-card { background:#fff; border:1px solid #e2ded0; border-radius:8px; padding:10px 12px; margin-top:8px; }
+  .nv-cenario-pergunta { margin:0 0 16px; }
+  .nv-cenario-pergunta-titulo { font-size:11.5px; font-weight:700; color:#5a5847; margin-bottom:8px; }
+  .nv-etapa-titulo { font-size:12.5px; font-weight:700; color:#2a2a1e; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid #e2ded0; }
+  .nv-etapa-sub { font-size:10.5px; font-weight:400; color:#8a886f; }
+  .nv-cenario-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+  .nv-cenario-card { background:#faf9f4; border:1.5px solid #e2ded0; border-radius:12px; padding:16px 14px; cursor:pointer; transition:border-color .15s, background .15s, box-shadow .15s; }
+  .nv-cenario-card:hover { border-color:#a3c96b; }
+  .nv-cenario-card.selecionado { background:#eef3e2; border-color:#3a5a26; box-shadow:0 0 0 1px #3a5a26; }
+  .nv-cenario-card .icone { font-size:20px; line-height:1; margin-bottom:8px; }
+  .nv-cenario-card .titulo { font-size:12px; font-weight:800; color:#1f1f14; margin-bottom:4px; }
+  .nv-cenario-card .desc { font-size:10px; color:#5a5847; line-height:1.4; }
+  #resultado { margin-top:16px; padding:14px 16px; border-radius:8px; font-size:12.5px; display:none; }
+  #resultado.ok { background:#eef3e2; color:#28451a; display:block; }
+  #resultado.erro { background:#f6e6e6; color:#7a2b2b; display:block; }
+  #resultado a.btn { display:inline-block; margin-top:8px; text-decoration:none; }
+  .premissas { font-size:10.5px; color:#5a5847; margin-top:6px; }
+  .hist-item { border:1px solid #e3e0d3; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+  .hist-item .hist-topo { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px; font-size:11.5px; }
+  .hist-item .hist-topo b { color:#1f1f14; }
+  .hist-item .hist-meta { font-size:10.5px; color:#5a5847; margin-top:2px; }
+  .hist-item .hist-resumo { font-size:11px; margin-top:4px; color:#3a3a28; }
+  .hist-item .hist-produtos { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+  .hist-item .hist-produto { background:#f4f2ea; border-radius:6px; padding:4px 8px; font-size:10px; color:#3a3a28; }
+  .hist-item .hist-produto .cat { color:#8a886f; }
+  .hist-item a.hist-link { font-size:11px; margin-left:6px; }
+  .hist-vazio { font-size:11.5px; color:#8a886f; padding:6px 0; }
+  .taxa-cols { display:none; }
+
+  .confirm-overlay {
+    display:none; position:fixed; inset:0; background:rgba(31,31,20,0.55); z-index:1000;
+    align-items:center; justify-content:center; padding:20px;
+  }
+  .confirm-overlay.show { display:flex; }
+  .confirm-box { background:#fff; border-radius:10px; padding:22px 24px; max-width:380px; width:100%; box-shadow:0 10px 30px rgba(0,0,0,0.25); }
+  .confirm-box p { margin:0 0 18px 0; font-size:13px; color:#1f1f14; line-height:1.5; }
+  .confirm-box .confirm-actions { display:flex; gap:8px; justify-content:flex-end; }
+
+  .prod-item { border:1px solid #e3e0d3; border-radius:8px; padding:10px 12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+  .prod-item .prod-info { font-size:11.5px; }
+  .prod-item .prod-info .nome { font-weight:700; color:#1f1f14; }
+  .prod-item .prod-info .cat { font-size:10px; color:#8a886f; margin-left:6px; text-transform:uppercase; letter-spacing:0.03em; }
+  .prod-item .prod-info .resumo { font-size:11px; color:#5a5847; margin-top:3px; }
+  .prod-item .prod-actions { display:flex; gap:6px; flex:none; }
+  #catalogoCard { display:none; }
+  #catalogoForm .row-actions { margin-top:14px; }
+
+  #calculadoraCard { display:none; }
+  .calc-modos { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 18px; }
+  .calc-modo-btn {
+    background:#efece2; color:#1f1f14; border:1px solid #d8d4c4; border-radius:999px;
+    padding:7px 14px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit;
+  }
+  .calc-modo-btn.ativo { background:#2c2c1a; color:#fff; border-color:#2c2c1a; }
+  .calc-resultado { margin-top:18px; background:#f4f2ea; border:1px solid #e3e0d3; border-radius:10px; padding:16px 18px; display:none; }
+  .calc-resultado.show { display:block; }
+  .calc-resultado .cr-principal { font-size:22px; font-weight:800; color:#1f1f14; margin-bottom:4px; }
+  .calc-resultado .cr-principal .lbl { font-size:11px; font-weight:700; color:#5a5847; text-transform:uppercase; letter-spacing:0.03em; display:block; margin-bottom:4px; }
+  .calc-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin-top:14px; }
+  .calc-grid .ci { background:#fff; border:1px solid #e3e0d3; border-radius:8px; padding:10px 12px; }
+  .calc-grid .ci .lbl { font-size:10px; font-weight:700; color:#8a886f; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:4px; }
+  .calc-grid .ci .val { font-size:14px; font-weight:700; color:#1f1f14; }
+  .calc-erro { color:#7a2b2b; font-size:12px; margin-top:10px; }
+
+  #novacaoCard { display:none; }
+  .nov-resultado { margin-top:18px; display:none; }
+  .nov-resultado.show { display:block; }
+  .nov-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:4px; }
+  .nov-col { border:1px solid #e3e0d3; border-radius:10px; overflow:hidden; }
+  .nov-col-header { background:#4f4f38; color:#fff; padding:10px 14px; }
+  .nov-col-header.destaque { background:#3a5a26; }
+  .nov-col-header .tag { font-size:9px; text-transform:uppercase; letter-spacing:0.4px; color:#c7c9b0; }
+  .nov-col-header .titulo { font-size:12.5px; font-weight:800; margin-top:2px; }
+  .nov-col-body { background:#f4f2ea; padding:12px 14px; }
+  .nov-etapa { margin-bottom:10px; }
+  .nov-etapa:last-child { margin-bottom:0; }
+  .nov-etapa .etapa-titulo { font-size:9.5px; font-weight:800; color:#5a5847; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.2px; }
+  .nov-row { display:flex; justify-content:space-between; font-size:11px; padding:3px 0; color:#2a2a1e; }
+  .nov-row .v { font-weight:700; }
+  .nov-row.neg .v { color:#8a4a4a; }
+  .nov-row.final { border-top:1px solid #d8d4c4; margin-top:6px; padding-top:7px; font-size:12px; }
+  .nov-row.final .v { font-weight:800; }
+  .nov-ganho-box { background:#a3c96b; color:#20300f; border-radius:10px; padding:16px 20px; margin-top:14px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .nov-ganho-box .titulo { font-size:12.5px; font-weight:800; }
+  .nov-ganho-box .sub { font-size:10px; font-weight:600; margin-top:2px; color:#28451a; }
+  .nov-ganho-box .valor { font-size:22px; font-weight:800; white-space:nowrap; }
+  .nov-ganho-box.custo { background:#e3ddc8; color:#4a3f22; }
+  .nov-ganho-box.custo .sub { color:#5a4a1e; }
+  .nov-vencida-box { background:#f4f2ea; border:1px solid #e3e0d3; border-radius:8px; padding:10px 14px; font-size:10.5px; line-height:1.5; color:#5a5847; margin-bottom:14px; }
+  .nov-vencida-box b { color:#2a2a1e; }
+  .nov-sugerida-resultado { margin-top:14px; padding-top:12px; border-top:1px dashed #d8d4c4; }
+  .nov-sugerida-resultado:first-child { margin-top:0; padding-top:0; border-top:none; }
+  .nov-sugerida-resultado .nome { font-size:11.5px; font-weight:800; color:#3a5a26; margin-bottom:6px; }
+  .nov-tabela-sugeridas { width:100%; border-collapse:collapse; margin-top:8px; font-size:11.5px; }
+  .nov-tabela-sugeridas th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:#8a886f; padding:8px 10px; border-bottom:1px solid #d8d4c4; }
+  .nov-tabela-sugeridas td { padding:9px 10px; border-bottom:1px solid #ece8dc; color:#2a2a1e; }
+  .nov-tabela-sugeridas tr:last-child td { border-bottom:none; }
+  .nov-tabela-sugeridas tr.melhor td { background:#eef3e2; font-weight:700; }
+  .nov-tabela-sugeridas td.valor { font-weight:700; white-space:nowrap; }
+  .nov-tabela-sugeridas td.valor.pos { color:#28451a; }
+  .nov-tabela-sugeridas td.valor.neg { color:#8a4a4a; }
+  .nov-tabela-sugeridas .selo { font-size:10px; font-weight:800; color:#3a5a26; }
+  .nv-detalhes { border:1px solid #e3e0d3; border-radius:8px; padding:0; background:#faf9f4; }
+  .nv-detalhes summary { cursor:pointer; padding:10px 14px; font-size:11.5px; font-weight:700; color:#5a5847; list-style:none; user-select:none; }
+  .nv-detalhes summary::-webkit-details-marker { display:none; }
+  .nv-detalhes summary::before { content:"▸ "; color:#8a886f; }
+  .nv-detalhes[open] summary::before { content:"▾ "; }
+  .nv-detalhes[open] summary { border-bottom:1px solid #e3e0d3; }
+  .nv-detalhes-corpo { padding:14px; }
+
+  .nv-info-btn {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:15px; height:15px; margin-left:3px; padding:0;
+    border:1px solid #b8b591; border-radius:50%; background:#f2efe6; color:#8a886f;
+    font-size:10px; line-height:1; cursor:pointer; vertical-align:middle;
+  }
+  .nv-info-btn:hover, .nv-info-btn:focus-visible { background:#e2ded0; color:#5a5847; }
+  .nv-info-texto { display:none; font-size:10.5px; color:#5a5847; background:#f2efe6; border-radius:6px; padding:6px 8px; margin-top:4px; }
+  .nv-info-texto.show { display:block; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="logo">GCB Simulador</div>
+    <div class="sub">Gera "Carteira Simulada" (Renda Mensal / Crescimento de Patrimônio) com dados oficiais BACEN + ANBIMA, ao vivo</div>
+  </div>
+  <div class="header-actions">
+    <button class="cadastrar-btn" id="toggleCatalogo" type="button"><span class="ic">📦</span> Produtos</button>
+    <button class="calculadora-btn" id="toggleCalculadora" type="button"><span class="ic">🧮</span> Calculadora Financeira</button>
+    <button class="novacao-btn" id="toggleNovacao" type="button"><span class="ic">🔄</span> Novação</button>
+    <a class="manual-link" href="https://claude.ai/code/artifact/f08df936-b577-4a35-aa9d-b6d8d9e795ce" target="_blank" rel="noopener" title="Manual do Simulador">
+      <span class="ic">📘</span> Manual
+    </a>
+  </div>
+</header>
+<main>
+
+  <div class="card">
+    <h2>Dados gerais</h2>
+    <div class="grid3">
+      <div>
+        <label>Cliente</label>
+        <input type="text" id="cliente" placeholder="Nome do cliente">
+      </div>
+      <div>
+        <label>Data-base</label>
+        <input type="date" id="dataBase">
+      </div>
+      <div>
+        <label>Modelo de relatório</label>
+        <select id="templateType">
+          <option value="renda">Carteira de Renda Mensal (juros distribuídos)</option>
+          <option value="crescimento">Carteira de Crescimento de Patrimônio (pagamento único no vencimento)</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid3" style="margin-top:14px;">
+      <div>
+        <label>Assessor</label>
+        <select id="assessorSelect">
+          <option value="Alexandre Gonçalves Moreira Junior">Alexandre Gonçalves Moreira Junior</option>
+          <option value="André Paim">André Paim</option>
+          <option value="Aurelio Hideaki Cintori">Aurelio Hideaki Cintori</option>
+          <option value="Caroline Cardeal Calegari da Silva">Caroline Cardeal Calegari da Silva</option>
+          <option value="Fabio Moreira da Silva">Fabio Moreira da Silva</option>
+          <option value="Henrico Natel">Henrico Natel</option>
+          <option value="Italo Beltran Izzo">Italo Beltran Izzo</option>
+          <option value="Laura de Oliveira Pessoa Mendes">Laura de Oliveira Pessoa Mendes</option>
+          <option value="Lucas Calandra">Lucas Calandra</option>
+          <option value="Lucas dos Anjos Silva">Lucas dos Anjos Silva</option>
+          <option value="Marco Anthonio Ferreira Berlanga">Marco Anthonio Ferreira Berlanga</option>
+          <option value="Mateus Tibério">Mateus Tibério</option>
+          <option value="Murillo Pinheiro">Murillo Pinheiro</option>
+          <option value="Rakelly Souza Oliveira">Rakelly Souza Oliveira</option>
+          <option value="Renan Augusto Nascimento">Renan Augusto Nascimento</option>
+          <option value="Thiago Passos Vieira">Thiago Passos Vieira</option>
+          <option value="Victor Bruno Neves">Victor Bruno Neves</option>
+          <option value="Vinícius Faria">Vinícius Faria</option>
+          <option value="Walacy Matheus Alves Santos">Walacy Matheus Alves Santos</option>
+          <option value="__outro__">Outro (digitar)</option>
+        </select>
+      </div>
+      <div id="assessorOutroWrap" style="display:none;">
+        <label>Nome do assessor</label>
+        <input type="text" id="assessorOutro" placeholder="Nome completo">
+      </div>
+    </div>
+    <div class="premissas" id="premissasInfo">Carregando premissas de mercado (BACEN)…</div>
+  </div>
+
+  <div class="card" id="catalogoCard" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <h2 style="margin:0;">Produtos</h2>
+      <button class="btn secondary small" id="fecharCatalogo" type="button">Fechar</button>
+    </div>
+    <p style="font-size:11.5px; color:#5a5847; margin:8px 0 14px;">Cadastre as características de um produto para reaproveitar em futuras simulações — na tabela de ativos, basta digitar o nome cadastrado e os demais campos preenchem sozinhos.</p>
+
+    <div class="calc-modos">
+      <button class="calc-modo-btn" data-catalogo-tab="catalogo" type="button">Catálogo</button>
+      <button class="calc-modo-btn" data-catalogo-tab="cadastrar" type="button">Cadastrar Produto</button>
+    </div>
+
+    <form id="catalogoForm" style="display:none;">
+      <input type="hidden" id="cp-id">
+      <div class="grid3">
+        <div>
+          <label>Categoria</label>
+          <select id="cp-categoria">
+            <option>CRA</option>
+            <option>CRI</option>
+            <option>Debênture</option>
+            <option>Operações Estruturadas</option>
+            <option>Precatório Estadual</option>
+            <option>Precatório Federal</option>
+            <option>Precatório Municipal</option>
+            <option>Recebível Judicial</option>
+          </select>
+        </div>
+        <div>
+          <label>Nome do produto</label>
+          <input type="text" id="cp-nome" placeholder="ex.: CRI Lumière">
+        </div>
+        <div>
+          <label>Indexador</label>
+          <select id="cp-tipo">
+            <option value="fixo">Prefixado (a.m.)</option>
+            <option value="fixoAA">Prefixado (a.a.)</option>
+            <option value="cdi">CDI +</option>
+            <option value="ipca">IPCA +</option>
+            <option value="pctcdi">% CDI</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid4" style="margin-top:14px;">
+        <div>
+          <label>Taxa</label>
+          <input type="number" step="0.01" min="0" id="cp-taxa" placeholder="1,60">
+        </div>
+        <div>
+          <label>Valor Mínimo (opcional)</label>
+          <input type="number" step="0.01" min="0" id="cp-valorMinimo" placeholder="ex.: 50000">
+        </div>
+        <div>
+          <label>Vencimento (opcional)</label>
+          <input type="date" id="cp-vencimento">
+        </div>
+        <div>
+          <label>Periodicidade</label>
+          <select id="cp-periodicidade">
+            <option value="mensal">Mensal</option>
+            <option value="semestral">Semestral</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid3" style="margin-top:14px;">
+        <div class="field-inline"><input type="checkbox" id="cp-isento"> Isento de IR</div>
+        <div>
+          <label>Fluxo de Pagamento</label>
+          <select id="cp-fluxoPagamento">
+            <option value="bullet">Bullet (pagamento único)</option>
+            <option value="distribuido">Distribuído (paga ao investidor)</option>
+            <option value="reinvestido">Reinvestido (soma ao saldo)</option>
+          </select>
+        </div>
+        <div class="field-inline"><input type="checkbox" id="cp-cashSweep"> Cash Sweep</div>
+      </div>
+      <div class="grid2" id="cp-periodicidadeCS" style="margin-top:14px; display:none;">
+        <div>
+          <label>Periodicidade dos Juros</label>
+          <select id="cp-periodicidadeJurosCS">
+            <option value="mensal">Mensal</option>
+            <option value="semestral">Semestral</option>
+          </select>
+        </div>
+        <div>
+          <label>Periodicidade da Amortização</label>
+          <select id="cp-periodicidadeAmortCS">
+            <option value="mensal">Mensal</option>
+            <option value="semestral">Semestral</option>
+          </select>
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn" type="submit" id="cp-salvar">Salvar Produto</button>
+        <button class="btn secondary" type="button" id="cp-cancelarEdicao" style="display:none;">Cancelar edição</button>
+      </div>
+    </form>
+
+    <div id="catalogoTabCatalogo">
+      <div class="grid2">
+        <div>
+          <label>Filtrar por Tipo</label>
+          <select id="catalogoFiltroTipo">
+            <option value="">Todos os tipos</option>
+          </select>
+        </div>
+        <div>
+          <label>Filtrar por Produto</label>
+          <select id="catalogoFiltroNome">
+            <option value="">Todos os produtos</option>
+          </select>
+        </div>
+      </div>
+      <input type="text" id="catalogoBusca" placeholder="Buscar por nome ou categoria…" style="margin-top:14px;">
+      <div id="catalogoLista" style="margin-top:10px;"></div>
+
+      <div style="margin-top:22px; border-top:1px solid #e3e0d3; padding-top:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0 0 4px; font-size:13px;">Importação / Exportação em Lote (CSV)</h3>
+            <p style="font-size:11px; color:#5a5847; margin:0;">Cadastre vários produtos de uma vez a partir de uma planilha, ou baixe o catálogo atual pra editar ou guardar como backup.</p>
+          </div>
+          <div style="display:flex; gap:8px; flex:none; flex-wrap:wrap;">
+            <button class="btn secondary small" id="catalogoExportar" type="button">Exportar CSV</button>
+            <button class="btn secondary small" id="catalogoBaixarModelo" type="button">Baixar modelo CSV</button>
+            <label class="btn secondary small" style="cursor:pointer; margin:0;">Escolher arquivo
+              <input type="file" id="catalogoImportarInput" accept=".csv" style="display:none;">
+            </label>
+          </div>
+        </div>
+        <div id="catalogoImportarResultado" style="margin-top:10px; font-size:11.5px; line-height:1.6;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="calculadoraCard" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <h2 style="margin:0;">Calculadora Financeira</h2>
+      <button class="btn secondary small" id="fecharCalculadora" type="button">Fechar</button>
+    </div>
+    <p style="font-size:11.5px; color:#5a5847; margin:8px 0 4px;">Cálculos avulsos de Valor Futuro, Valor Presente, Rentabilidade e Taxa Equivalente, para os 4 indexadores (Pré, CDI+, IPCA+, % CDI) — usa as mesmas taxas de mercado ao vivo e a mesma metodologia (252 dias úteis, capitalização composta) das simulações de carteira.</p>
+
+    <div class="calc-modos">
+      <button class="calc-modo-btn ativo" data-modo="vf" type="button">Valor Futuro</button>
+      <button class="calc-modo-btn" data-modo="vp" type="button">Valor Presente</button>
+      <button class="calc-modo-btn" data-modo="rentabilidade" type="button">Rentabilidade</button>
+      <button class="calc-modo-btn" data-modo="taxaEquivalente" type="button">Taxa Equivalente</button>
+    </div>
+
+    <form id="calculadoraForm">
+      <div class="grid3" id="calc-linha-indexador">
+        <div>
+          <label>Indexador</label>
+          <select id="cf-tipo">
+            <option value="fixo">Prefixado (a.m.)</option>
+            <option value="fixoAA">Prefixado (a.a.)</option>
+            <option value="cdi">CDI +</option>
+            <option value="ipca">IPCA +</option>
+            <option value="pctcdi">% CDI</option>
+          </select>
+        </div>
+        <div>
+          <label>Taxa</label>
+          <input type="number" step="0.01" min="0" id="cf-taxa" placeholder="1,60">
+        </div>
+        <div class="field-inline" id="calc-campo-isento" style="align-self:end; margin-bottom:8px;">
+          <input type="checkbox" id="cf-isento"> Isento de IR
+        </div>
+      </div>
+      <div class="grid3" style="margin-top:14px;">
+        <div>
+          <label>Data-base</label>
+          <input type="date" id="cf-dataBase">
+        </div>
+        <div>
+          <label id="calc-label-vencimento">Vencimento</label>
+          <input type="date" id="cf-vencimento">
+        </div>
+        <div id="calc-campo-vi">
+          <label id="calc-label-vi">Valor Investido</label>
+          <input type="number" step="0.01" min="0" id="cf-valorInvestido" placeholder="100000">
+        </div>
+      </div>
+      <div style="margin-top:14px; max-width:calc(33.33% - 10px);" id="calc-linha-vf">
+        <div id="calc-campo-vf">
+          <label id="calc-label-vf">Valor Futuro Desejado</label>
+          <input type="number" step="0.01" min="0" id="cf-valorFuturo" placeholder="150000">
+        </div>
+      </div>
+      <div id="calc-campo-cashsweep" style="margin-top:14px;">
+        <div class="field-inline" title="Excesso de caixa da operação amortiza o principal antes do vencimento contratual">
+          <input type="checkbox" id="cf-cashSweep"> Cash Sweep (amortização programada + juros sobre saldo devedor)
+        </div>
+        <div class="grid2" id="calc-periodicidade-cashsweep" style="margin-top:10px; display:none;">
+          <div>
+            <label>Periodicidade dos Juros</label>
+            <select id="cf-periodicidadeJurosCS">
+              <option value="mensal">Mensal</option>
+              <option value="semestral">Semestral</option>
+            </select>
+          </div>
+          <div>
+            <label>Periodicidade da Amortização</label>
+            <select id="cf-periodicidadeAmortCS">
+              <option value="mensal">Mensal</option>
+              <option value="semestral">Semestral</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="btn" type="submit">Calcular</button>
+      </div>
+    </form>
+
+    <div class="calc-erro" id="calc-erro" style="display:none;"></div>
+    <div class="calc-resultado" id="calc-resultado"></div>
+  </div>
+
+  <div class="card" id="novacaoCard" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <h2 style="margin:0;">Novação de Debênture</h2>
+      <button class="btn secondary small" id="fecharNovacao" type="button">Fechar</button>
+    </div>
+    <p style="font-size:11.5px; color:#5a5847; margin:8px 0 14px;">Compara o resultado líquido de <b>resgatar e reaplicar</b> a debênture no vencimento (novo ciclo de IR) versus <b>renovar por novação</b> (sem resgate — o prazo de IR conta desde a aplicação original, o que costuma render alíquota menor).</p>
+
+    <div class="nv-cenario-pergunta">
+      <div class="nv-cenario-pergunta-titulo">1. Quantas debêntures você quer novar agora?</div>
+      <div class="nv-cenario-grid" id="nv-perguntaQtd">
+        <div class="nv-cenario-card" data-qtd="uma">
+          <div class="icone">📄</div>
+          <div class="titulo">Uma debênture</div>
+          <div class="desc">Analisar e gerar o relatório de uma posição por vez</div>
+        </div>
+        <div class="nv-cenario-card" data-qtd="varias">
+          <div class="icone">📋</div>
+          <div class="titulo">Várias debêntures</div>
+          <div class="desc">Vencidas ou a vencer, tudo comparado num relatório só</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nv-cenario-pergunta" id="nv-pergunta2Wrap">
+      <div class="nv-cenario-pergunta-titulo">2. Comparar a novação contra o quê?</div>
+      <div class="nv-cenario-grid" id="nv-perguntaComparacao">
+        <div class="nv-cenario-card" data-comparacao="simplificado">
+          <div class="icone">💰</div>
+          <div class="titulo">Deixar parado a 90% do CDI</div>
+          <div class="desc">Comparação rápida — não precisa escolher produto de reaplicação</div>
+        </div>
+        <div class="nv-cenario-card" data-comparacao="completo">
+          <div class="icone">🔄</div>
+          <div class="titulo">Um produto de reaplicação específico</div>
+          <div class="desc">Quando já existe uma alternativa concreta definida para o cliente</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="nv-secaoUnica">
+    <form id="novacaoForm">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+        <h3 style="font-size:12px; margin:0;">Aplicação Atual (a ser novada)</h3>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="nv-aplicacaoSalva" style="max-width:230px;">
+            <option value="">Carregar aplicação salva...</option>
+          </select>
+          <button class="btn secondary small" type="button" id="nv-salvarAplicacao">Salvar</button>
+          <button class="btn danger small" type="button" id="nv-removerAplicacao" style="display:none;">Remover</button>
+        </div>
+      </div>
+      <div class="nv-etapa-titulo">1. Primeira Aplicação <span class="nv-etapa-sub">— data e valor aplicado, base do cálculo de IR</span></div>
+      <div class="grid3">
+        <div>
+          <label>Data da Primeira Aplicação</label>
+          <input type="date" id="nv-dataAplicacaoOriginal">
+        </div>
+        <div>
+          <label>Valor Investido (aporte inicial) <button type="button" class="nv-info-btn" aria-label="Mais informações">ⓘ</button></label>
+          <input type="number" step="0.01" min="0" id="nv-valorInvestido" placeholder="10000">
+          <div class="nv-info-texto">Base do Imposto de Renda: o ganho tributável é o valor final menos este aporte original. Não muda mesmo se a debênture já foi novada antes.</div>
+        </div>
+      </div>
+
+      <div class="nv-etapa-titulo" style="margin-top:18px;">2. Debênture a ser novada <span class="nv-etapa-sub">— condição vigente hoje (90% do CDI, ou outra), desde quando, e até quando</span></div>
+      <div class="grid3">
+        <div>
+          <label>Nome do ativo atual (opcional)</label>
+          <input type="text" id="nv-nomeAtual" placeholder="ex.: Debênture Liquidez Diária">
+        </div>
+        <div>
+          <label>Indexador</label>
+          <select id="nv-tipoAtual">
+            <option value="fixo">Prefixado (a.m.)</option>
+            <option value="fixoAA" selected>Prefixado (a.a.)</option>
+            <option value="cdi">CDI +</option>
+            <option value="ipca">IPCA +</option>
+            <option value="pctcdi">% CDI</option>
+          </select>
+        </div>
+        <div>
+          <label>Taxa</label>
+          <input type="number" step="0.01" min="0" id="nv-taxaAtual" placeholder="ex.: 90 (se % CDI)">
+        </div>
+      </div>
+      <div class="grid3" style="margin-top:10px;">
+        <div>
+          <label>Aplicada em <button type="button" class="nv-info-btn" aria-label="Mais informações">ⓘ</button></label>
+          <input type="date" id="nv-dataAplicacao">
+          <div class="nv-info-texto">Data em que essa condição (taxa/indexador atual) passou a valer. Se a debênture nunca foi novada, é a mesma data da Primeira Aplicação acima. Se já foi novada antes, é a data dessa novação anterior — preenchida automaticamente, mas pode ajustar.</div>
+        </div>
+        <div>
+          <label>Vencimento</label>
+          <input type="date" id="nv-vencimentoAtual" class="nv-prazo-restante-input">
+          <div id="nv-vencimentoAtual-prazo" class="nv-prazo-restante" style="display:none; font-size:9.5px; color:#8a886f; margin-top:2px;"></div>
+        </div>
+        <div>
+          <label>Valor Atual da Posição <button type="button" class="nv-info-btn" aria-label="Mais informações">ⓘ</button></label>
+          <input type="number" step="0.01" min="0" id="nv-valorAtualPosicao" placeholder="12500">
+          <div class="nv-info-texto">O valor real, de hoje (do extrato ou do app do cliente) — usado em todos os cálculos a partir daqui, sem recalcular.</div>
+        </div>
+      </div>
+      <div class="field-inline" style="margin-top:10px;">
+        <input type="checkbox" id="nv-isentoAtual"> Isento de IR (debênture atual)
+      </div>
+
+      <div class="nv-etapa-titulo" style="margin-top:18px;">3. Novação Proposta</div>
+
+      <div class="grid3" style="margin-top:14px;">
+        <div>
+          <label>Data da Novação é:</label>
+          <select id="nv-modoNovacao">
+            <option value="vencimento" selected>A própria Data de Vencimento</option>
+            <option value="assinatura">O dia seguinte à Assinatura do termo</option>
+          </select>
+        </div>
+        <div id="nv-campoAssinatura" style="display:none;">
+          <label>Data da Assinatura</label>
+          <input type="date" id="nv-dataAssinatura">
+        </div>
+      </div>
+      <p style="font-size:10.5px; color:#8a886f; margin:6px 0 0;">O <b>resgate</b> (Cenário 1) sempre ocorre no vencimento contratual, não na data da novação. Já a <b>novação</b> (Cenário 2) pode acontecer antes do vencimento (encerra o prazo contratado mais cedo) ou depois (a partir do vencimento, se ainda não formalizada, o ativo passa a render automaticamente <b>90% do CDI</b> até a data da novação).</p>
+
+      <div class="field-inline" style="margin-top:14px; display:none;">
+        <input type="checkbox" id="nv-modoSimplificado">
+        <label for="nv-modoSimplificado" style="margin:0; font-weight:400;">Modo simplificado: não escolher produto de reaplicação — comparar a Novação apenas contra deixar o capital parado a 90% do CDI</label>
+      </div>
+
+      <div class="grid2" style="margin-top:22px; gap:20px;">
+        <div id="nv-secaoReaplicacao">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <h3 style="font-size:12px; margin:0 0 10px; color:#5a5847;">Cenário 1 — Se resgatar: Produto de Reaplicação</h3>
+            <button class="btn secondary small" type="button" id="nv-copiarNovacao" style="white-space:nowrap; margin-bottom:10px;">Copiar da Debênture Sugerida</button>
+          </div>
+          <p style="font-size:10px; color:#8a886f; margin:0 0 10px;">Não precisa ser outra debênture — qualquer produto onde o cliente reaplicaria após o resgate.</p>
+          <div class="grid2" style="margin-bottom:10px;">
+            <div>
+              <label>Filtrar por Tipo</label>
+              <select id="nv-reaplicacaoFiltroTipo">
+                <option value="">Todos os tipos</option>
+              </select>
+            </div>
+            <div>
+              <label>Usar produto do Catálogo</label>
+              <select id="nv-reaplicacaoFiltroProduto">
+                <option value="">Selecionar (opcional)...</option>
+              </select>
+            </div>
+          </div>
+          <label>Nome do ativo (opcional)</label>
+          <input type="text" id="nv-nomeReaplicacao" placeholder="ex.: CDB Banco X">
+          <div class="grid2" style="margin-top:10px;">
+            <div>
+              <label>Indexador</label>
+              <select id="nv-tipoReaplicacao">
+                <option value="fixo">Prefixado (a.m.)</option>
+                <option value="fixoAA" selected>Prefixado (a.a.)</option>
+                <option value="cdi">CDI +</option>
+                <option value="ipca">IPCA +</option>
+                <option value="pctcdi">% CDI</option>
+              </select>
+            </div>
+            <div>
+              <label>Taxa</label>
+              <input type="number" step="0.01" min="0" id="nv-taxaReaplicacao" placeholder="25,00">
+            </div>
+          </div>
+          <div class="grid2" style="margin-top:10px;">
+            <div>
+              <label>Vencimento da Reaplicação</label>
+              <input type="date" id="nv-vencimentoReaplicacao">
+            </div>
+            <div class="field-inline" style="align-self:end; margin-bottom:8px;">
+              <input type="checkbox" id="nv-isentoReaplicacao"> Isento de IR
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <label>Fluxo de Pagamento</label>
+            <select id="nv-fluxoReaplicacao">
+              <option value="bullet">Bullet (pagamento único)</option>
+              <option value="distribuido">Distribuído (paga ao investidor)</option>
+              <option value="reinvestido">Reinvestido (soma ao saldo)</option>
+            </select>
+          </div>
+          <div class="field-inline" style="margin-top:10px;">
+            <input type="checkbox" id="nv-cashSweepReaplicacao"> Cash Sweep (amortização programada + juros sobre saldo devedor)
+          </div>
+          <div class="grid2" id="nv-periodicidadeReaplicacaoWrap" style="margin-top:10px; display:none;">
+            <div>
+              <label>Periodicidade dos Juros</label>
+              <select id="nv-periodicidadeReaplicacao">
+                <option value="mensal">Mensal</option>
+                <option value="semestral">Semestral</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid2" id="nv-periodicidadeCashSweepReaplicacaoWrap" style="margin-top:10px; display:none;">
+            <div>
+              <label>Periodicidade dos Juros</label>
+              <select id="nv-periodicidadeJurosCSReaplicacao">
+                <option value="mensal">Mensal</option>
+                <option value="semestral">Semestral</option>
+              </select>
+            </div>
+            <div>
+              <label>Periodicidade da Amortização</label>
+              <select id="nv-periodicidadeAmortCSReaplicacao">
+                <option value="mensal">Mensal</option>
+                <option value="semestral">Semestral</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <h3 style="font-size:12px; margin:0 0 10px; color:#5a5847;">Cenário 2 — Se novar: Debênture(s) Sugerida(s)</h3>
+            <button class="btn secondary small" type="button" id="nv-adicionarSugeridaUnica" style="white-space:nowrap; margin-bottom:10px;">+ Adicionar Debênture Sugerida</button>
+          </div>
+          <p style="font-size:10px; color:#8a886f; margin:0 0 10px;">O título é renovado (novado) sem evento de resgate. No <b>modo simplificado</b>, dá pra adicionar mais de uma pra comparar qual opção rende mais contra o mesmo Cenário 1; no modo completo (com produto de reaplicação), fica limitado a uma por vez.</p>
+          <div id="nv-sugeridasLista"></div>
+        </div>
+      </div>
+
+      <div class="row-actions">
+        <button class="btn" type="submit">Calcular</button>
+      </div>
+    </form>
+
+    <div class="calc-erro" id="nv-erro" style="display:none;"></div>
+
+    <div class="nov-resultado" id="nv-resultado">
+      <div id="nv-vencida-box"></div>
+      <div class="nov-cols">
+        <div class="nov-col">
+          <div class="nov-col-header">
+            <div class="tag">Sem novação</div>
+            <div class="titulo" id="nv-titulo-resgate">Resgate e Reaplicação</div>
+          </div>
+          <div class="nov-col-body" id="nv-col-resgate"></div>
+        </div>
+        <div class="nov-col">
+          <div class="nov-col-header destaque">
+            <div class="tag">Com novação</div>
+            <div class="titulo" id="nv-titulo-novacao">Novação no Vencimento</div>
+          </div>
+          <div class="nov-col-body" id="nv-col-novacao"></div>
+        </div>
+      </div>
+      <div class="nov-ganho-box" id="nv-ganho-box"></div>
+      <div id="nv-resultados-multiplas-sugeridas" style="display:none;"></div>
+      <div class="row-actions">
+        <button class="btn secondary" type="button" id="nv-gerarRelatorio">Gerar Relatório PDF</button>
+      </div>
+      <div id="nv-relatorio-link" style="margin-top:10px; font-size:11.5px;"></div>
+    </div>
+    </div>
+
+    <div id="nv-secaoMultiplas" style="display:none;">
+    <div class="field-inline" style="display:none;">
+      <input type="checkbox" id="nv-modoMultiplas">
+      <label for="nv-modoMultiplas" style="margin:0; font-weight:600;">Comparar várias debêntures de uma vez (vencidas ou a vencer)</label>
+    </div>
+
+    <div id="nv-multiplasContainer" style="margin-top:0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <h3 style="font-size:12px; margin:0;">Debêntures para Novar</h3>
+        <button class="btn secondary small" type="button" id="nv-toggleSugeridas">Gerenciar Debêntures Sugeridas (catálogo)</button>
+      </div>
+
+      <div id="nv-sugeridasPainel" style="display:none; background:#f2efe6; border-radius:10px; padding:12px 14px; margin-top:10px;">
+        <div class="grid3">
+          <div>
+            <label>Nome</label>
+            <input type="text" id="nv-sugNome" placeholder="ex.: Debênture Janeiro 2029">
+          </div>
+          <div>
+            <label>Indexador</label>
+            <select id="nv-sugTipo">
+              <option value="fixo">Prefixado (a.m.)</option>
+              <option value="fixoAA" selected>Prefixado (a.a.)</option>
+              <option value="cdi">CDI +</option>
+              <option value="ipca">IPCA +</option>
+              <option value="pctcdi">% CDI</option>
+            </select>
+          </div>
+          <div>
+            <label>Taxa</label>
+            <input type="number" step="0.01" min="0" id="nv-sugTaxa" placeholder="23,42">
+          </div>
+        </div>
+        <div class="grid3" style="margin-top:8px;">
+          <div>
+            <label>Vencimento (opcional)</label>
+            <input type="date" id="nv-sugVencimento">
+          </div>
+          <div style="align-self:end;">
+            <button class="btn secondary small" type="button" id="nv-salvarSugerida">Adicionar ao catálogo</button>
+          </div>
+        </div>
+        <div id="nv-listaSugeridas" style="margin-top:10px; border-top:1px solid #e2ded0; padding-top:8px;"></div>
+      </div>
+
+      <div id="nv-posicoesLista" style="margin-top:12px;"></div>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button class="btn secondary small" type="button" id="nv-adicionarPosicao">+ Adicionar Debênture</button>
+        <button class="btn secondary small" type="button" id="nv-toggleImportar">Importar lista colada (Excel)</button>
+      </div>
+
+      <div id="nv-importarPainel" style="display:none; background:#f2efe6; border-radius:10px; padding:12px 14px; margin-top:10px;">
+        <p style="font-size:10.5px; color:#5a5847; margin:0 0 8px;">
+          Cole aqui, uma debênture por linha, com os campos separados por Tab (copiado direto do Excel) — <strong>Nome, Valor Atual, Vencimento Atual (dd/mm/aaaa)</strong>. Você pode adicionar mais duas colunas opcionais: <strong>Valor Investido, Data de Aplicação</strong>.
+        </p>
+        <textarea id="nv-importarTexto" rows="5" style="width:100%; font-family:Consolas, monospace; font-size:11px;" placeholder="Debênture Julho 2027	12500	25/07/2027
+Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn secondary small" type="button" id="nv-confirmarImportar">Importar</button>
+          <span id="nv-importarErro" style="display:none; font-size:10.5px; color:#a33;"></span>
+        </div>
+      </div>
+
+      <div class="nv-etapa-titulo" style="margin-top:18px;">3. Novação Proposta <span class="nv-etapa-sub">— a mesma para todas as debêntures acima</span></div>
+      <div class="grid3">
+        <div>
+          <label>Data da Novação é:</label>
+          <select id="nv-multiplasModoNovacao">
+            <option value="vencimento" selected>A própria Data de Vencimento</option>
+            <option value="assinatura">O dia seguinte à Assinatura do termo</option>
+          </select>
+        </div>
+        <div id="nv-multiplasCampoAssinatura" style="display:none;">
+          <label>Data da Assinatura</label>
+          <input type="date" id="nv-multiplasDataAssinatura">
+        </div>
+      </div>
+      <div class="grid3" style="margin-top:10px;">
+        <div>
+          <label>Usar do catálogo</label>
+          <select id="nv-multiplasSugeridaCatalogo" class="nv-pos-sugeridaCatalogo"></select>
+        </div>
+        <div>
+          <label>Nome do ativo</label>
+          <input type="text" id="nv-multiplasNomeNovacao" placeholder="ex.: Debênture 2029">
+        </div>
+        <div>
+          <label>Indexador</label>
+          <select id="nv-multiplasTipoNovacao">
+            <option value="fixo">Prefixado (a.m.)</option>
+            <option value="fixoAA" selected>Prefixado (a.a.)</option>
+            <option value="cdi">CDI +</option>
+            <option value="ipca">IPCA +</option>
+            <option value="pctcdi">% CDI</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid3" style="margin-top:8px;">
+        <div>
+          <label>Taxa</label>
+          <input type="number" step="0.01" min="0" id="nv-multiplasTaxaNovacao" placeholder="23,42">
+        </div>
+        <div>
+          <label>Novo Vencimento (após novação)</label>
+          <input type="date" id="nv-multiplasVencimentoNovacao">
+        </div>
+      </div>
+
+      <div class="row-actions" style="margin-top:18px;">
+        <button class="btn secondary" type="button" id="nv-gerarRelatorioMultiplo">Gerar Relatório PDF (Várias Debêntures)</button>
+        <button class="btn secondary" type="button" id="nv-gerarRelatorioLote">Gerar em Lote (Multi-Cliente)</button>
+      </div>
+      <p style="font-size:10px; color:#8a886f; margin:6px 0 0;">"Multi-Cliente" agrupa as posições pelo campo "Cliente desta posição" de cada card (ou pelo Cliente geral, quando vazio) e gera um PDF separado por cliente.</p>
+      <div id="nv-multiplas-relatorio-link" style="margin-top:10px; font-size:11.5px;"></div>
+    </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Ativos da carteira</h2>
+    <table id="ativosTable">
+      <thead>
+        <tr>
+          <th style="width:8%">Tipo</th>
+          <th style="width:12%">Produto</th>
+          <th style="width:7%">Indexador</th>
+          <th style="width:7%">Taxa</th>
+          <th style="width:9%">Valor Investido</th>
+          <th style="width:9%">Vencimento</th>
+          <th style="width:6%" title="Para Debênture, só marque se for efetivamente incentivada (Lei 12.431/2011). Debênture comum é tributada normalmente.">Isento IR?</th>
+          <th style="width:15%" title="Bullet: pagamento único no vencimento. Distribuído: juros pagos ao investidor na periodicidade escolhida. Reinvestido: juros somados ao saldo a cada período, já líquidos de IR quando aplicável.">Fluxo de Pagamento</th>
+          <th style="width:19%" title="Frequência do pagamento de juros (e, no Cash Sweep, também da amortização)">Periodicidade</th>
+          <th style="width:8%"></th>
+        </tr>
+      </thead>
+      <tbody id="ativosBody"></tbody>
+    </table>
+    <div class="row-actions">
+      <button class="btn secondary small" id="addAtivo">+ adicionar ativo</button>
+      <span style="font-size:11px; color:#5a5847; align-self:center;">Total investido: <b id="totalInvestido">R$ 0</b></span>
+    </div>
+  </div>
+
+  <div class="row-actions">
+    <button class="btn" id="gerarBtn">Gerar PDF</button>
+  </div>
+
+  <div id="resultado"></div>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+      <h2 style="margin:0;">Histórico de Simulações</h2>
+      <button class="btn secondary small" id="toggleHistorico">Mostrar</button>
+    </div>
+    <div id="historicoWrap" style="display:none; margin-top:14px;">
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <input type="text" id="historicoBusca" placeholder="Buscar por cliente, assessor ou produto…" style="flex:1;">
+        <select id="historicoFiltroAssessor" style="max-width:220px;">
+          <option value="">Todos os assessores</option>
+        </select>
+      </div>
+      <div id="historicoLista"></div>
+    </div>
+  </div>
+
+</main>
+
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <p id="confirmMensagem"></p>
+    <div class="confirm-actions">
+      <button class="btn secondary small" id="confirmNao" type="button">Não</button>
+      <button class="btn danger small" id="confirmSim" type="button">Sim</button>
+    </div>
+  </div>
+</div>
+
+<template id="linhaTpl">
+  <tr>
+    <td>
+      <select class="f-tipoProdutoLabel">
+        <option>CRA</option>
+        <option>CRI</option>
+        <option>Debênture</option>
+        <option>Operações Estruturadas</option>
+        <option>Precatório Estadual</option>
+        <option>Precatório Federal</option>
+        <option>Precatório Municipal</option>
+        <option>Recebível Judicial</option>
+      </select>
+    </td>
+    <td>
+      <input type="text" class="f-nome" list="" placeholder="ex.: Debênture 3 Anos" autocomplete="off">
+      <datalist class="f-produtos-datalist"></datalist>
+    </td>
+    <td>
+      <select class="f-tipo">
+        <option value="fixo">Prefixado (a.m.)</option>
+        <option value="fixoAA">Prefixado (a.a.)</option>
+        <option value="cdi">CDI +</option>
+        <option value="ipca">IPCA +</option>
+        <option value="pctcdi">% CDI</option>
+      </select>
+    </td>
+    <td><input type="number" step="0.01" min="0" class="f-taxa" placeholder="1,60"></td>
+    <td><input type="number" step="0.01" min="0" class="f-vi" placeholder="150000"></td>
+    <td><input type="date" class="f-vencimento"></td>
+    <td style="text-align:center"><input type="checkbox" class="f-isento"></td>
+    <td>
+      <select class="f-fluxoPagamento">
+        <option value="bullet">Bullet (pagamento único)</option>
+        <option value="distribuido">Distribuído (paga ao investidor)</option>
+        <option value="reinvestido">Reinvestido (soma ao saldo)</option>
+      </select>
+      <div class="field-inline" title="Excesso de caixa da operação amortiza o principal antes do vencimento contratual"><input type="checkbox" class="f-cashSweep"> Cash Sweep</div>
+    </td>
+    <td>
+      <div class="periodicidade-normal">
+        <select class="f-periodicidade">
+          <option value="mensal">Mensal</option>
+          <option value="semestral">Semestral</option>
+        </select>
+      </div>
+      <div class="periodicidade-cashsweep" style="display:none;">
+        <div class="field-inline">Juros:
+          <select class="f-periodicidadeJurosCS">
+            <option value="mensal">Mensal</option>
+            <option value="semestral">Semestral</option>
+          </select>
+        </div>
+        <div class="field-inline">Amort.:
+          <select class="f-periodicidadeAmortCS">
+            <option value="mensal">Mensal</option>
+            <option value="semestral">Semestral</option>
+          </select>
+        </div>
+      </div>
+    </td>
+    <td><button class="btn danger small f-remover">×</button></td>
+  </tr>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>

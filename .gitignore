@@ -1,0 +1,7 @@
+node_modules/
+output/*.pdf
+data/
+cache/
+logs/
+*.log
+.env

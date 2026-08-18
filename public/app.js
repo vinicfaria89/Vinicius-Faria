@@ -2,6 +2,22 @@ const ativosBody = document.getElementById('ativosBody');
 const linhaTpl = document.getElementById('linhaTpl');
 const totalInvestidoEl = document.getElementById('totalInvestido');
 
+// Estado "ativo" nos botões do header (Produtos/Calculadora/Novação) — reflete qual painel está
+// aberto no momento, já que os 3 podem ficar visualmente idênticos sem isso. Chamado depois de toda
+// ação que abre/fecha um dos 3 cards (ver toggleCatalogo/toggleCalculadora/toggleNovacao e os
+// respectivos botões "Fechar" mais abaixo).
+function nvAtualizarBotaoAtivoHeader() {
+  [
+    { btnId: 'toggleCatalogo', cardId: 'catalogoCard' },
+    { btnId: 'toggleCalculadora', cardId: 'calculadoraCard' },
+    { btnId: 'toggleNovacao', cardId: 'novacaoCard' },
+  ].forEach(({ btnId, cardId }) => {
+    const btn = document.getElementById(btnId);
+    const card = document.getElementById(cardId);
+    if (btn && card) btn.classList.toggle('ativo', card.style.display !== 'none');
+  });
+}
+
 // Modal de confirmação (Sim/Não) reaproveitável — substitui o confirm() nativo do navegador nos
 // pontos onde uma exclusão precisa de confirmação explícita, mantendo a identidade visual do app.
 function confirmarAcao(mensagem) {
@@ -628,9 +644,11 @@ document.getElementById('toggleCalculadora').addEventListener('click', () => {
   const abrindo = card.style.display === 'none';
   card.style.display = abrindo ? 'block' : 'none';
   if (abrindo) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  nvAtualizarBotaoAtivoHeader();
 });
 document.getElementById('fecharCalculadora').addEventListener('click', () => {
   document.getElementById('calculadoraCard').style.display = 'none';
+  nvAtualizarBotaoAtivoHeader();
 });
 
 // --- Novação de Debênture ---
@@ -644,9 +662,11 @@ document.getElementById('toggleNovacao').addEventListener('click', () => {
   const abrindo = card.style.display === 'none';
   card.style.display = abrindo ? 'block' : 'none';
   if (abrindo) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  nvAtualizarBotaoAtivoHeader();
 });
 document.getElementById('fecharNovacao').addEventListener('click', () => {
   document.getElementById('novacaoCard').style.display = 'none';
+  nvAtualizarBotaoAtivoHeader();
 });
 
 // Data de hoje (fuso local) em 'AAAA-MM-DD' — usada pra pré-preencher "Data da Assinatura" (ver
@@ -2272,9 +2292,11 @@ document.getElementById('toggleCatalogo').addEventListener('click', () => {
     cpCarregarLista();
     card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  nvAtualizarBotaoAtivoHeader();
 });
 document.getElementById('fecharCatalogo').addEventListener('click', () => {
   document.getElementById('catalogoCard').style.display = 'none';
+  nvAtualizarBotaoAtivoHeader();
 });
 
 document.getElementById('toggleHistorico').addEventListener('click', () => {

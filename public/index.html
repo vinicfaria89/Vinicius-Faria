@@ -42,9 +42,23 @@
   }
   header .novacao-btn:hover { background:#46462c; }
   header .novacao-btn .ic { font-size:14px; line-height:1; }
+  /* Estado "ativo" (painel aberto) — sem isso os 3 botões do header (Produtos/Calculadora/Novação)
+     ficam sempre com a mesma aparência, sem indicar qual painel está aberto no momento. Um verde
+     escuro com anel de destaque, distinto tanto do estado padrão escuro (Calculadora/Novação) quanto
+     do padrão verde-claro (Produtos), pra funcionar como "ativo" nos dois casos. */
+  header .cadastrar-btn.ativo, header .calculadora-btn.ativo, header .novacao-btn.ativo {
+    background:#20300f; color:#a3c96b; border-color:#a3c96b;
+    box-shadow:0 0 0 2px rgba(163,201,107,0.35);
+  }
   main { max-width:960px; margin:24px auto; padding:0 20px; }
   .card { background:#fff; border:1px solid #d8d4c4; border-radius:10px; padding:20px 22px; margin-bottom:18px; }
-  .card h2 { font-size:14px; margin:0 0 14px 0; color:#1f1f14; }
+  /* Hierarquia mais clara entre título de card (h2), subseção (h3) e texto normal (11-12.5px) — sem
+     isso os três ficavam quase do mesmo tamanho, difícil bater o olho e saber "onde estou" numa tela
+     cheia de campos. Só tamanho/peso/cor (sem borda) porque a maioria dos h2/h3 do app fica numa
+     linha flex ao lado de um botão ("Fechar", "Copiar da Debênture Sugerida" etc.) — uma borda
+     inferior no título ficaria desalinhada com o botão vizinho, que não teria a mesma borda embaixo. */
+  .card h2 { font-size:17px; font-weight:800; letter-spacing:-0.01em; margin:0 0 16px 0; color:#1f1f14; }
+  .card h3 { font-size:13px; font-weight:800; margin:0 0 10px 0; color:#3a3a28; }
   label { display:block; font-size:11px; font-weight:700; color:#3a3a28; margin-bottom:4px; }
   input[type=text], input[type=date], input[type=number], select {
     width:100%; padding:7px 8px; border:1px solid #d8d4c4; border-radius:6px; font-size:12.5px; font-family:inherit;
@@ -379,7 +393,7 @@
       <div style="margin-top:22px; border-top:1px solid #e3e0d3; padding-top:14px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
           <div>
-            <h3 style="margin:0 0 4px; font-size:13px;">Importação / Exportação em Lote (CSV)</h3>
+            <h3 style="margin:0 0 4px;">Importação / Exportação em Lote (CSV)</h3>
             <p style="font-size:11px; color:#5a5847; margin:0;">Cadastre vários produtos de uma vez a partir de uma planilha, ou baixe o catálogo atual pra editar ou guardar como backup.</p>
           </div>
           <div style="display:flex; gap:8px; flex:none; flex-wrap:wrap;">
@@ -521,7 +535,7 @@
     <div id="nv-secaoUnica">
     <form id="novacaoForm">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-        <h3 style="font-size:12px; margin:0;">Aplicação Atual (a ser novada)</h3>
+        <h3 style="margin:0;">Aplicação Atual (a ser novada)</h3>
         <div style="display:flex; gap:8px; align-items:center;">
           <select id="nv-aplicacaoSalva" style="max-width:230px;">
             <option value="">Carregar aplicação salva...</option>
@@ -610,7 +624,7 @@
       <div class="grid2" style="margin-top:22px; gap:20px;">
         <div id="nv-secaoReaplicacao">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <h3 style="font-size:12px; margin:0 0 10px; color:#5a5847;">Cenário 1 — Se resgatar: Produto de Reaplicação</h3>
+            <h3 style="margin:0 0 10px;">Cenário 1 — Se resgatar: Produto de Reaplicação</h3>
             <button class="btn secondary small" type="button" id="nv-copiarNovacao" style="white-space:nowrap; margin-bottom:10px;">Copiar da Debênture Sugerida</button>
           </div>
           <p style="font-size:10px; color:#8a886f; margin:0 0 10px;">Não precisa ser outra debênture — qualquer produto onde o cliente reaplicaria após o resgate.</p>
@@ -694,7 +708,7 @@
         </div>
         <div>
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <h3 style="font-size:12px; margin:0 0 10px; color:#5a5847;">Cenário 2 — Se novar: Debênture(s) Sugerida(s)</h3>
+            <h3 style="margin:0 0 10px;">Cenário 2 — Se novar: Debênture(s) Sugerida(s)</h3>
             <button class="btn secondary small" type="button" id="nv-adicionarSugeridaUnica" style="white-space:nowrap; margin-bottom:10px;">+ Adicionar Debênture Sugerida</button>
           </div>
           <p style="font-size:10px; color:#8a886f; margin:0 0 10px;">O título é renovado (novado) sem evento de resgate. No <b>modo simplificado</b>, dá pra adicionar mais de uma pra comparar qual opção rende mais contra o mesmo Cenário 1; no modo completo (com produto de reaplicação), fica limitado a uma por vez.</p>
@@ -744,7 +758,7 @@
 
     <div id="nv-multiplasContainer" style="margin-top:0;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-        <h3 style="font-size:12px; margin:0;">Debêntures para Novar</h3>
+        <h3 style="margin:0;">Debêntures para Novar</h3>
         <button class="btn secondary small" type="button" id="nv-toggleSugeridas">Gerenciar Debêntures Sugeridas (catálogo)</button>
       </div>
 

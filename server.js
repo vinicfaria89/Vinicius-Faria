@@ -26,6 +26,21 @@ const CATEGORIAS_SEMPRE_ISENTAS = ['CRI', 'CRA'];
 // esse passo é pulado, sem erro.
 const SIMULACAO_DIR = path.join(__dirname, '..');
 
+// Em uso local (fora de produção), também salva uma cópia de todo PDF gerado na pasta "Simulação"
+// (OneDrive) — conveniência do fluxo de uso individual na própria máquina; em produção (servidor
+// compartilhado, ver NODE_ENV=production no deploy) fica desativado, porque a pasta-pai do app no
+// servidor não tem nenhuma relação com a pasta pessoal do usuário. Compartilhada por TODOS os
+// endpoints que geram PDF (Carteira Simulada e os dois de Novação) — antes só o de Carteira tinha
+// esse passo, então os relatórios de Novação nunca apareciam na pasta Simulação.
+function copiarParaPastaSimulacao(pdfPath, nomeArquivo) {
+  if (process.env.NODE_ENV === 'production') return;
+  try {
+    fs.copyFileSync(pdfPath, path.join(SIMULACAO_DIR, nomeArquivo));
+  } catch (copyErr) {
+    console.warn(`Aviso: não foi possível copiar para a pasta Simulação: ${copyErr.message}`);
+  }
+}
+
 // Autenticação HTTP Basic — só é ativada se BASIC_AUTH_USER e BASIC_AUTH_PASS estiverem definidos
 // (variáveis de ambiente), pensada para uso em servidor compartilhado. Em uso local, sem essas
 // variáveis, o app continua acessível sem login, como sempre foi.
@@ -156,18 +171,7 @@ app.post('/api/gerar', async (req, res) => {
 
     const nomeArquivo = `${cliente.replace(/[^\p{L}\p{N}]+/gu, '_')}_${templateType === 'renda' ? 'Renda_Mensal' : 'Crescimento_Patrimonio'}_${Date.now()}.pdf`;
     const pdfPath = await gerarPdfDeHtml(html, nomeArquivo, OUTPUT_DIR);
-
-    // Em uso local (fora de produção), também salva uma cópia na pasta "Simulação" (OneDrive) — esse
-    // passo é puramente uma conveniência do fluxo de uso individual na própria máquina; em produção
-    // (servidor compartilhado, ver NODE_ENV=production no deploy) ele é desativado, porque a pasta-pai
-    // do app no servidor não tem nenhuma relação com a pasta pessoal do usuário.
-    if (process.env.NODE_ENV !== 'production') {
-      try {
-        fs.copyFileSync(pdfPath, path.join(SIMULACAO_DIR, nomeArquivo));
-      } catch (copyErr) {
-        console.warn(`Aviso: não foi possível copiar para a pasta Simulação: ${copyErr.message}`);
-      }
-    }
+    copiarParaPastaSimulacao(pdfPath, nomeArquivo);
 
     // Registra no histórico — inclui os produtos simulados (nome, categoria, taxa, valor, vencimento),
     // não só o resumo agregado, pra dar pra ver depois "quem simulou o quê" sem reabrir o PDF.
@@ -509,7 +513,8 @@ app.post('/api/novacao/gerar', async (req, res) => {
     });
 
     const nomeArquivo = `Novacao_${cliente.replace(/[^\p{L}\p{N}]+/gu, '_')}_${Date.now()}.pdf`;
-    await gerarPdfDeHtml(html, nomeArquivo, OUTPUT_DIR);
+    const pdfPath = await gerarPdfDeHtml(html, nomeArquivo, OUTPUT_DIR);
+    copiarParaPastaSimulacao(pdfPath, nomeArquivo);
 
     res.json({ ok: true, arquivo: nomeArquivo, downloadUrl: `/api/download/${encodeURIComponent(nomeArquivo)}`, resultado });
   } catch (err) {
@@ -698,7 +703,8 @@ app.post('/api/novacao/multiplas/gerar', async (req, res) => {
     });
 
     const nomeArquivo = `Novacao_Multipla_${cliente.replace(/[^\p{L}\p{N}]+/gu, '_')}_${Date.now()}.pdf`;
-    await gerarPdfDeHtml(html, nomeArquivo, OUTPUT_DIR);
+    const pdfPath = await gerarPdfDeHtml(html, nomeArquivo, OUTPUT_DIR);
+    copiarParaPastaSimulacao(pdfPath, nomeArquivo);
 
     res.json({
       ok: true,

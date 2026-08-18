@@ -18,6 +18,185 @@ function nvAtualizarBotaoAtivoHeader() {
   });
 }
 
+// --- Rascunho automático da Novação (autosave) ---------------------------------------------------
+// Salva o preenchimento no localStorage a cada mudança, pra não perder tudo se a aba fechar sem
+// querer, o navegador travar, ou algo (ex.: sincronização do OneDrive) roubar o foco no meio de uma
+// das 20-50 operações do dia. Não mexe em cálculo nem em nada que vai pro servidor — puro
+// front-end; se o localStorage não estiver disponível (modo privado, por ex.), falha em silêncio e
+// o app funciona normalmente, só sem esse recurso.
+const NV_RASCUNHO_KEY = 'gcbNovacaoRascunho_v1';
+
+// Campos de topo (formulário de uma debênture) — id -> valor. Cobre etapas 1/2/3 do fluxo único,
+// incluindo o Cenário 1 (reaplicação) do modo completo.
+const NV_RASCUNHO_CAMPOS_TOPO = [
+  'cliente', 'nv-dataAplicacaoOriginal', 'nv-valorInvestido', 'nv-nomeAtual', 'nv-tipoAtual', 'nv-taxaAtual',
+  'nv-dataAplicacao', 'nv-vencimentoAtual', 'nv-valorAtualPosicao', 'nv-isentoAtual',
+  'nv-modoNovacao', 'nv-dataAssinatura',
+  'nv-nomeReaplicacao', 'nv-tipoReaplicacao', 'nv-taxaReaplicacao', 'nv-vencimentoReaplicacao', 'nv-isentoReaplicacao',
+  'nv-fluxoReaplicacao', 'nv-periodicidadeReaplicacao', 'nv-cashSweepReaplicacao',
+  'nv-periodicidadeJurosCSReaplicacao', 'nv-periodicidadeAmortCSReaplicacao',
+];
+// Etapa 3 compartilhada do modo "várias debêntures".
+const NV_RASCUNHO_CAMPOS_PROPOSTA = [
+  'nv-multiplasModoNovacao', 'nv-multiplasDataAssinatura', 'nv-multiplasSugeridaCatalogo',
+  'nv-multiplasNomeNovacao', 'nv-multiplasTipoNovacao', 'nv-multiplasTaxaNovacao', 'nv-multiplasVencimentoNovacao',
+];
+// Campos (por classe) de cada card repetível — debênture sugerida (formulário único) e posição
+// (várias debêntures) — na mesma ordem em que aparecem no card.
+const NV_RASCUNHO_CAMPOS_SUGERIDA = ['nv-pos-sugeridaCatalogo', 'nv-pos-nomeNovacao', 'nv-pos-tipoNovacao', 'nv-pos-taxaNovacao', 'nv-pos-vencimentoNovacao'];
+const NV_RASCUNHO_CAMPOS_POSICAO = ['nv-pos-dataAplicacaoOriginal', 'nv-pos-valorInvestido', 'nv-pos-nome', 'nv-pos-tipoAtual', 'nv-pos-taxaAtual', 'nv-pos-dataAplicacao', 'nv-pos-vencimentoAtual', 'nv-pos-valorAtual', 'nv-pos-isentoAtual', 'nv-pos-cliente'];
+
+function nvLerCampoParaRascunho(el) {
+  return el.type === 'checkbox' ? el.checked : el.value;
+}
+
+function nvEscreverCampoDoRascunho(el, valor) {
+  if (el.type === 'checkbox') el.checked = !!valor;
+  else el.value = valor ?? '';
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// Serializa uma lista repetível (cards de sugerida ou de posição) num array de objetos {classe: valor}.
+function nvSerializarListaRascunho(containerId, cardSelector, camposClasses) {
+  return Array.from(document.querySelectorAll(`#${containerId} ${cardSelector}`)).map((card) => {
+    const obj = {};
+    camposClasses.forEach((cls) => {
+      const el = card.querySelector(`.${cls}`);
+      if (el) obj[cls] = nvLerCampoParaRascunho(el);
+    });
+    return obj;
+  });
+}
+
+// Reconstrói uma lista repetível a partir do array salvo — limpa o container e recria um card por
+// item, na mesma ordem, preenchendo cada campo (dispara "change" pra acionar toggles condicionais,
+// mesmo padrão já usado em nvDuplicarBloco).
+function nvRestaurarListaRascunho(containerId, criarFn, itens, camposClasses) {
+  const container = document.getElementById(containerId);
+  if (!container || !itens.length) return;
+  container.innerHTML = '';
+  itens.forEach((item) => {
+    const card = criarFn();
+    camposClasses.forEach((cls) => {
+      const el = card.querySelector(`.${cls}`);
+      if (el && cls in item) nvEscreverCampoDoRascunho(el, item[cls]);
+    });
+    container.appendChild(card);
+  });
+}
+
+function nvColetarRascunho() {
+  const topo = {};
+  NV_RASCUNHO_CAMPOS_TOPO.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) topo[id] = nvLerCampoParaRascunho(el);
+  });
+  const proposta = {};
+  NV_RASCUNHO_CAMPOS_PROPOSTA.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) proposta[id] = nvLerCampoParaRascunho(el);
+  });
+  const qtdCard = document.querySelector('#nv-perguntaQtd .nv-cenario-card.selecionado');
+  const comparacaoCard = document.querySelector('#nv-perguntaComparacao .nv-cenario-card.selecionado');
+  return {
+    v: 1,
+    savedAt: Date.now(),
+    qtd: qtdCard ? qtdCard.dataset.qtd : 'uma',
+    comparacao: comparacaoCard ? comparacaoCard.dataset.comparacao : 'simplificado',
+    topo,
+    proposta,
+    sugeridas: nvSerializarListaRascunho('nv-sugeridasLista', '.nov-sugerida-card', NV_RASCUNHO_CAMPOS_SUGERIDA),
+    posicoes: nvSerializarListaRascunho('nv-posicoesLista', '.nov-posicao-card', NV_RASCUNHO_CAMPOS_POSICAO),
+  };
+}
+
+function nvRascunhoTemDados(rascunho) {
+  if (!rascunho) return false;
+  const topoPreenchido = Object.values(rascunho.topo || {}).some((v) => v && v !== '0');
+  return topoPreenchido || (rascunho.sugeridas || []).some((s) => Object.values(s).some(Boolean)) || (rascunho.posicoes || []).length > 0;
+}
+
+function nvSalvarRascunho() {
+  try {
+    localStorage.setItem(NV_RASCUNHO_KEY, JSON.stringify(nvColetarRascunho()));
+  } catch (err) {
+    // localStorage indisponível (modo privado, cota cheia etc.) — autosave só não funciona.
+  }
+}
+
+function nvLerRascunhoSalvo() {
+  try {
+    const raw = localStorage.getItem(NV_RASCUNHO_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function nvLimparRascunho() {
+  try { localStorage.removeItem(NV_RASCUNHO_KEY); } catch (err) { /* ver nvSalvarRascunho */ }
+}
+
+function nvRestaurarRascunho(rascunho) {
+  Object.entries(rascunho.topo || {}).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) nvEscreverCampoDoRascunho(el, val);
+  });
+  Object.entries(rascunho.proposta || {}).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) nvEscreverCampoDoRascunho(el, val);
+  });
+  nvRestaurarListaRascunho('nv-sugeridasLista', () => nvCriarBlocoSugerida(document.getElementById('nv-sugeridasLista')), rascunho.sugeridas || [], NV_RASCUNHO_CAMPOS_SUGERIDA);
+  nvRestaurarListaRascunho('nv-posicoesLista', nvCriarBlocoPosicao, rascunho.posicoes || [], NV_RASCUNHO_CAMPOS_POSICAO);
+  // O seletor de cenário (qtd/comparação) decide qual seção fica visível — refeito por último, pra
+  // não esconder/ignorar os campos que acabaram de ser preenchidos acima.
+  const cardQtd = document.querySelector(`#nv-perguntaQtd [data-qtd="${rascunho.qtd}"]`);
+  if (cardQtd) cardQtd.click();
+  const cardComparacao = document.querySelector(`#nv-perguntaComparacao [data-comparacao="${rascunho.comparacao}"]`);
+  if (cardComparacao) cardComparacao.click();
+}
+
+// "há Xh" / "há Xmin" em vez de timestamp cru, pra ficar claro sem exigir conta de cabeça.
+function nvFormatarTempoDecorrido(timestampMs) {
+  const minutos = Math.max(1, Math.round((Date.now() - timestampMs) / 60000));
+  if (minutos < 60) return `há ${minutos} minuto${minutos === 1 ? '' : 's'}`;
+  const horas = Math.round(minutos / 60);
+  return `há ${horas} hora${horas === 1 ? '' : 's'}`;
+}
+
+function nvVerificarRascunho() {
+  const rascunho = nvLerRascunhoSalvo();
+  const banner = document.getElementById('nv-rascunhoBanner');
+  if (!banner) return;
+  if (!nvRascunhoTemDados(rascunho)) {
+    banner.style.display = 'none';
+    return;
+  }
+  document.getElementById('nv-rascunhoQuando').textContent = nvFormatarTempoDecorrido(rascunho.savedAt);
+  banner.style.display = 'flex';
+}
+
+document.getElementById('nv-rascunhoRestaurar').addEventListener('click', () => {
+  const rascunho = nvLerRascunhoSalvo();
+  if (rascunho) nvRestaurarRascunho(rascunho);
+  document.getElementById('nv-rascunhoBanner').style.display = 'none';
+});
+document.getElementById('nv-rascunhoDescartar').addEventListener('click', () => {
+  nvLimparRascunho();
+  document.getElementById('nv-rascunhoBanner').style.display = 'none';
+});
+
+// Salva a cada mudança dentro do painel de Novação, com debounce (evita gravar no localStorage a
+// cada tecla digitada) — delegado no document porque os cards de posição/sugerida são criados
+// dinamicamente depois do carregamento da página.
+let nvSalvarRascunhoTimeout = null;
+['input', 'change'].forEach((evento) => document.addEventListener(evento, (e) => {
+  if (!e.target.closest('#novacaoCard')) return;
+  if (e.target.closest('#nv-rascunhoBanner')) return;
+  clearTimeout(nvSalvarRascunhoTimeout);
+  nvSalvarRascunhoTimeout = setTimeout(nvSalvarRascunho, 600);
+}));
+
 // Modal de confirmação (Sim/Não) reaproveitável — substitui o confirm() nativo do navegador nos
 // pontos onde uma exclusão precisa de confirmação explícita, mantendo a identidade visual do app.
 function confirmarAcao(mensagem) {
@@ -661,7 +840,10 @@ document.getElementById('toggleNovacao').addEventListener('click', () => {
   const card = document.getElementById('novacaoCard');
   const abrindo = card.style.display === 'none';
   card.style.display = abrindo ? 'block' : 'none';
-  if (abrindo) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (abrindo) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    nvVerificarRascunho();
+  }
   nvAtualizarBotaoAtivoHeader();
 });
 document.getElementById('fecharNovacao').addEventListener('click', () => {
@@ -1167,6 +1349,7 @@ document.getElementById('nv-gerarRelatorio').addEventListener('click', async () 
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.erro || 'Falha ao gerar o relatório.');
       linkEl.innerHTML = `<a class="btn" href="${data.downloadUrl}" download style="text-decoration:none; display:inline-block;">Baixar Relatório PDF</a>`;
+      nvLimparRascunho();
       return;
     }
     const payload = {
@@ -1184,6 +1367,7 @@ document.getElementById('nv-gerarRelatorio').addEventListener('click', async () 
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.erro || 'Falha ao gerar o relatório.');
     linkEl.innerHTML = `<a class="btn" href="${data.downloadUrl}" download style="text-decoration:none; display:inline-block;">Baixar Relatório PDF</a>`;
+    nvLimparRascunho();
   } catch (err) {
     linkEl.innerHTML = `<span style="color:#7a2b2b;">Erro: ${err.message}</span>`;
   }
@@ -1610,6 +1794,7 @@ document.getElementById('nv-gerarRelatorioMultiplo').addEventListener('click', a
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.erro || 'Falha ao gerar o relatório.');
     linkEl.innerHTML = `<a class="btn" href="${data.downloadUrl}" download style="text-decoration:none; display:inline-block;">Baixar Relatório PDF</a>`;
+    nvLimparRascunho();
   } catch (err) {
     linkEl.innerHTML = `<span style="color:#7a2b2b;">Erro: ${err.message}</span>`;
   }
@@ -1662,6 +1847,9 @@ document.getElementById('nv-gerarRelatorioLote').addEventListener('click', async
   const linksHtml = links.map((l) => `<a class="btn" href="${l.downloadUrl}" download style="text-decoration:none; display:inline-block; margin:0 8px 8px 0;">${l.cliente} — Baixar PDF</a>`).join('');
   const errosHtml = erros.length ? `<div style="color:#7a2b2b; margin-top:6px;">${erros.map((e) => `Erro em ${e}`).join('<br>')}</div>` : '';
   linkEl.innerHTML = `<div>${linksHtml}</div>${errosHtml}` || '<span style="color:#7a2b2b;">Nenhum relatório gerado.</span>';
+  // Só limpa o rascunho se pelo menos um cliente saiu com sucesso — se todos falharam, o assessor
+  // provavelmente ainda vai precisar corrigir e tentar de novo, sem perder o que já preencheu.
+  if (links.length) nvLimparRascunho();
 });
 
 // --- Formulário padrão (uma debênture atual): a lista de Debêntures Sugeridas reaproveita o mesmo

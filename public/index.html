@@ -500,6 +500,14 @@
     </div>
     <p style="font-size:11.5px; color:#5a5847; margin:8px 0 14px;">Compara o resultado líquido de <b>resgatar e reaplicar</b> a debênture no vencimento (novo ciclo de IR) versus <b>renovar por novação</b> (sem resgate — o prazo de IR conta desde a aplicação original, o que costuma render alíquota menor).</p>
 
+    <div id="nv-rascunhoBanner" style="display:none; background:#f2efe6; border:1px solid #e2ded0; border-radius:10px; padding:10px 14px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <span style="font-size:11.5px; color:#5a5847;">📝 Encontramos um preenchimento não enviado, salvo automaticamente <span id="nv-rascunhoQuando"></span>.</span>
+      <div style="display:flex; gap:8px;">
+        <button class="btn secondary small" type="button" id="nv-rascunhoRestaurar">Restaurar</button>
+        <button class="btn danger small" type="button" id="nv-rascunhoDescartar">Descartar</button>
+      </div>
+    </div>
+
     <div class="nv-cenario-pergunta">
       <div class="nv-cenario-pergunta-titulo">1. Quantas debêntures você quer novar agora?</div>
       <div class="nv-cenario-grid" id="nv-perguntaQtd">

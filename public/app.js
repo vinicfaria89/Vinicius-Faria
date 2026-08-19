@@ -671,11 +671,11 @@ document.getElementById('gerarBtn').addEventListener('click', async () => {
 // --- Calculadora Financeira (avulsa, fora do fluxo de simulação de carteira) ---
 
 const CALC_MODOS = {
-  vf: { showIndexador: true, showIsento: true, showVI: true, showVF: false, showValorBruto: false, showComparar: true, vencimentoLabel: 'Vencimento' },
-  vp: { showIndexador: true, showIsento: true, showVI: false, showVF: true, showValorBruto: false, showComparar: false, vfLabel: 'Valor Futuro Desejado', vencimentoLabel: 'Vencimento' },
-  rentabilidade: { showIndexador: false, showIsento: false, showVI: true, showVF: true, showValorBruto: false, showComparar: false, vfLabel: 'Valor Futuro (conhecido)', vencimentoLabel: 'Data Final' },
-  taxaEquivalente: { showIndexador: true, showIsento: true, showVI: false, showVF: false, showValorBruto: false, showComparar: false, vencimentoLabel: 'Vencimento' },
-  ir: { showIndexador: false, showIsento: true, showVI: false, showVF: false, showValorBruto: true, showComparar: false, vencimentoLabel: 'Data Final (resgate)' },
+  vf: { showIndexador: true, showIsento: true, showVI: true, showVF: false, showValorBruto: false, showComparar: true, showTipoVF: false, vencimentoLabel: 'Vencimento' },
+  vp: { showIndexador: true, showIsento: true, showVI: false, showVF: true, showValorBruto: false, showComparar: false, showTipoVF: true, vfLabel: 'Valor Futuro Desejado', vencimentoLabel: 'Vencimento' },
+  rentabilidade: { showIndexador: false, showIsento: false, showVI: true, showVF: true, showValorBruto: false, showComparar: false, showTipoVF: false, vfLabel: 'Valor Futuro (conhecido)', vencimentoLabel: 'Data Final' },
+  taxaEquivalente: { showIndexador: true, showIsento: true, showVI: false, showVF: false, showValorBruto: false, showComparar: false, showTipoVF: false, vencimentoLabel: 'Vencimento' },
+  ir: { showIndexador: false, showIsento: true, showVI: false, showVF: false, showValorBruto: true, showComparar: false, showTipoVF: false, vencimentoLabel: 'Data Final (resgate)' },
 };
 let calcModoAtual = 'vf';
 let calcComparando = false;
@@ -696,6 +696,8 @@ function calcAtualizarCamposVisiveis() {
   document.getElementById('calc-campo-isento').style.display = cfg.showIsento ? '' : 'none';
   document.getElementById('calc-campo-vi').style.display = cfg.showVI ? '' : 'none';
   document.getElementById('calc-linha-vf').style.display = cfg.showVF ? '' : 'none';
+  document.getElementById('calc-campo-tipoVF').style.display = cfg.showTipoVF ? '' : 'none';
+  if (!cfg.showTipoVF) document.querySelector('input[name="cf-tipoValorFuturo"][value="bruto"]').checked = true;
   document.getElementById('calc-linha-valorBruto').style.display = cfg.showValorBruto ? '' : 'none';
   document.getElementById('calc-campo-comparar').style.display = cfg.showComparar ? '' : 'none';
   if (!cfg.showComparar && calcComparando) {
@@ -748,6 +750,14 @@ function calcFmtPrazo(dias) {
   return anos >= 1 ? `≈${anos.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} anos (${dias} dias)` : `${dias} dias`;
 }
 
+// Formata uma data ISO "AAAA-MM-DD" (valor cru de <input type="date">) pra "DD/MM/AAAA" sem passar
+// por new Date() — evita o deslocamento de fuso horário que faria a data "voltar" um dia.
+function calcFmtDataDDMMAAAA(isoDate) {
+  if (!isoDate) return '—';
+  const [ano, mes, dia] = isoDate.split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+
 // Botão "Copiar resumo" — aparece em todo resultado (qualquer modo), pra colar direto numa conversa
 // com o cliente. Pedido explícito do time comercial: é a função mais usada depois de calcular.
 function calcBotaoCopiarHtml() {
@@ -776,12 +786,14 @@ function calcLigarBotaoCopiar() {
 function calcMontarResumoWhatsapp() {
   const ctx = calcUltimoContexto;
   if (!ctx) return '';
-  const { modo, r, taxaLabel, prazoTexto } = ctx;
+  const { modo, r, taxaLabel, prazoTexto, vencimentoTexto } = ctx;
   if (modo === 'vf') {
-    return `Simulação\n\nValor: ${fmtBRL(ctx.valorInvestido)}\nPrazo: ${prazoTexto}\nRentabilidade: ${taxaLabel}\nValor líquido estimado: ${fmtBRL(r.vfLiquido)}`;
+    return `Simulação\n\nValor: ${fmtBRL(ctx.valorInvestido)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nRentabilidade: ${taxaLabel}\nValor líquido estimado: ${fmtBRL(r.vfLiquido)}`;
   }
   if (modo === 'vp') {
-    return `Simulação\n\nValor a investir hoje: ${fmtBRL(r.viNecessario)}\nPrazo: ${prazoTexto}\nRentabilidade: ${taxaLabel}\nValor futuro bruto (alvo): ${fmtBRL(r.vfBruto)}\nValor futuro líquido estimado: ${fmtBRL(r.vfLiquidoResultante)}`;
+    const alvoLabel = r.tipoValorFuturo === 'liquido' ? 'Valor futuro líquido (alvo)' : 'Valor futuro bruto (alvo)';
+    const alvoValor = r.tipoValorFuturo === 'liquido' ? r.vfLiquidoResultante : r.vfBruto;
+    return `Simulação\n\nValor a investir hoje: ${fmtBRL(r.viNecessario)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nRentabilidade: ${taxaLabel}\n${alvoLabel}: ${fmtBRL(alvoValor)}\nValor futuro líquido estimado: ${fmtBRL(r.vfLiquidoResultante)}`;
   }
   if (modo === 'rentabilidade') {
     return `Simulação\n\nValor investido: ${fmtBRL(ctx.valorInvestido)}\nValor futuro: ${fmtBRL(ctx.valorFuturo)}\nPrazo: ${prazoTexto}\nRentabilidade: ${calcFmtPct(r.rentabilidadePct)} (${fmtBRL(r.rentabilidadeRS)})\nTaxa anualizada implícita: ${calcFmtPct(r.taxaAnualizadaPct)} a.a.`;
@@ -821,10 +833,10 @@ function calcRenderResultado(modo, r) {
     el.innerHTML = `
       <div class="cr-principal"><span class="lbl">Valor a Investir Hoje</span>${fmtBRL(r.viNecessario)}</div>
       <div class="calc-grid">
-        <div class="ci"><div class="lbl">Valor Futuro Bruto (alvo)</div><div class="val">${fmtBRL(r.vfBruto)}</div></div>
+        <div class="ci"><div class="lbl">Valor Futuro Bruto${r.tipoValorFuturo === 'bruto' ? ' (alvo)' : ''}</div><div class="val">${fmtBRL(r.vfBruto)}</div></div>
         <div class="ci"><div class="lbl">Imposto de Renda</div><div class="val">${fmtBRL(r.ir)}</div></div>
         <div class="ci"><div class="lbl">Alíquota de IR</div><div class="val">${isentoLabel(calcUltimoContexto && calcUltimoContexto.isento) || calcFmtPct(r.aliquotaPct)}</div></div>
-        <div class="ci"><div class="lbl">Valor Futuro Líquido</div><div class="val">${fmtBRL(r.vfLiquidoResultante)}</div></div>
+        <div class="ci"><div class="lbl">Valor Futuro Líquido${r.tipoValorFuturo === 'liquido' ? ' (alvo)' : ''}</div><div class="val">${fmtBRL(r.vfLiquidoResultante)}</div></div>
         <div class="ci"><div class="lbl">Taxa Efetiva</div><div class="val">${calcFmtPct(r.iAnualPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.dias} dias (${r.du} du)</div></div>
       </div>${calcBotaoCopiarHtml()}`;
@@ -916,6 +928,7 @@ document.getElementById('calculadoraForm').addEventListener('submit', async (e) 
   const vencimento = document.getElementById('cf-vencimento').value;
   const valorInvestido = Number(document.getElementById('cf-valorInvestido').value || 0);
   const prazoTexto = (dataBase && vencimento) ? calcFmtPrazo(Math.round((new Date(vencimento) - new Date(dataBase)) / 86400000)) : '—';
+  const vencimentoTexto = calcFmtDataDDMMAAAA(vencimento);
 
   try {
     if (calcModoAtual === 'vf' && calcComparando) {
@@ -935,7 +948,7 @@ document.getElementById('calculadoraForm').addEventListener('submit', async (e) 
       if (!respB.ok) throw new Error(`Produto B: ${dataB.erro || 'Falha ao calcular.'}`);
       const taxaLabelA = calcTaxaResumoLabel(payloadA.tipo, payloadA.taxa);
       const taxaLabelB = calcTaxaResumoLabel(payloadB.tipo, payloadB.taxa);
-      calcUltimoContexto = { modo: 'comparar', rA: dataA.resultado, rB: dataB.resultado, taxaLabelA, taxaLabelB, valorInvestido, prazoTexto };
+      calcUltimoContexto = { modo: 'comparar', rA: dataA.resultado, rB: dataB.resultado, taxaLabelA, taxaLabelB, valorInvestido, prazoTexto, vencimentoTexto };
       calcRenderComparacao(dataA.resultado, dataB.resultado, taxaLabelA, taxaLabelB);
       return;
     }
@@ -951,6 +964,7 @@ document.getElementById('calculadoraForm').addEventListener('submit', async (e) 
       valorFuturoDesejado: Number(document.getElementById('cf-valorFuturo').value || 0),
       valorFuturo: Number(document.getElementById('cf-valorFuturo').value || 0),
       valorBruto: Number(document.getElementById('cf-valorBruto').value || 0),
+      tipoValorFuturo: (document.querySelector('input[name="cf-tipoValorFuturo"]:checked') || {}).value || 'bruto',
     };
 
     const resp = await fetch('/api/calculadora', {
@@ -967,6 +981,7 @@ document.getElementById('calculadoraForm').addEventListener('submit', async (e) 
       isento: payload.isento,
       taxaLabel: calcModoAtual === 'rentabilidade' ? null : calcTaxaResumoLabel(payload.tipo, payload.taxa),
       prazoTexto,
+      vencimentoTexto,
       valorInvestido,
       valorFuturo: payload.valorFuturo,
     };

@@ -75,6 +75,24 @@ describe('calcularValorPresente — inverso de calcularValorFuturo', () => {
     assertClose(vp.viNecessario, vi, 'VP do VF bruto recupera o VI original');
     assertClose(vp.vfLiquidoResultante, vf.vfLiquido, 'VF líquido resultante bate com o calculado no modo VF');
   });
+
+  test('alvo LÍQUIDO: VP(VF(VI)) recupera o VI original a partir do vfLiquido (não isento)', () => {
+    const ativoTaxa = { tipo: 'cdi', spread: 0.02 };
+    const vi = 5000;
+    const vf = calcularValorFuturo({ ativoTaxa, dataBase, vencimento, isento: false, valorInvestido: vi }, curvas);
+    const vp = calcularValorPresente({ ativoTaxa, dataBase, vencimento, isento: false, valorFuturoDesejado: vf.vfLiquido, tipoValorFuturo: 'liquido' }, curvas);
+    assertClose(vp.viNecessario, vi, 'VP do VF líquido recupera o VI original');
+    assertClose(vp.vfBruto, vf.vfBruto, 'VF bruto recuperado bate com o calculado no modo VF');
+    assertClose(vp.vfLiquidoResultante, vf.vfLiquido, 'VF líquido resultante bate com o alvo informado');
+  });
+
+  test('alvo LÍQUIDO, isento: se reduz ao caso bruto (IR = 0)', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.10 };
+    const vpBruto = calcularValorPresente({ ativoTaxa, dataBase, vencimento, isento: true, valorFuturoDesejado: 100000, tipoValorFuturo: 'bruto' }, curvas);
+    const vpLiquido = calcularValorPresente({ ativoTaxa, dataBase, vencimento, isento: true, valorFuturoDesejado: 100000, tipoValorFuturo: 'liquido' }, curvas);
+    assertClose(vpBruto.viNecessario, vpLiquido.viNecessario, 'isento: bruto e líquido convergem pro mesmo VI');
+    assertClose(vpLiquido.ir, 0, 'isento: IR = 0');
+  });
 });
 
 describe('calcularRentabilidade — descobre a taxa implícita a partir de VI e VF conhecidos', () => {

@@ -306,7 +306,7 @@ app.post('/api/calculadora', async (req, res) => {
     }
 
     if (modo === 'vp') {
-      const { tipo, taxa, dataBase, vencimento, isento, valorFuturoDesejado } = req.body;
+      const { tipo, taxa, dataBase, vencimento, isento, valorFuturoDesejado, tipoValorFuturo } = req.body;
       if (!tipo || !dataBase || !vencimento || !(Number(valorFuturoDesejado) > 0) || !(Number(taxa) > 0)) {
         return res.status(400).json({ erro: 'Preencha indexador, taxa (maior que 0), data-base, vencimento e valor futuro desejado (maior que 0).' });
       }
@@ -316,6 +316,7 @@ app.post('/api/calculadora', async (req, res) => {
         vencimento: parseDataLocal(vencimento),
         isento: !!isento,
         valorFuturoDesejado: Number(valorFuturoDesejado),
+        tipoValorFuturo: tipoValorFuturo === 'liquido' ? 'liquido' : 'bruto',
       }, curvas);
       return res.json({ resultado });
     }

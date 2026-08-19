@@ -7,6 +7,7 @@ const {
   calcularValorPresente,
   calcularRentabilidade,
   calcularTaxaEquivalente,
+  calcularIR,
 } = require('../lib/calculadoraFinanceira');
 
 const EPS = 1e-6;
@@ -93,5 +94,41 @@ describe('calcularTaxaEquivalente — mesma taxa sob outras óticas', () => {
     const r = calcularTaxaEquivalente({ ativoTaxa, dataBase, vencimento }, curvas);
     assertClose(r.taxaMensalPct, 1, 'equivalente mensal = 1%');
     assertClose(r.cdiRefPct, 10, 'curva constante de 10% a.a.');
+  });
+
+  test('isento: taxa bruta equivalente aplica o gross-up pela alíquota do prazo', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.10 };
+    const r = calcularTaxaEquivalente({ ativoTaxa, dataBase, vencimento, isento: true }, curvas);
+    assert.equal(r.dias, 365);
+    assertClose(r.aliquotaComparacaoPct, 17.5, 'prazo de 365 dias (>360 e <=720) cai na faixa de 17,5%');
+    assertClose(r.taxaBrutaEquivalentePct, (0.10 / (1 - 0.175)) * 100, 'taxaBruta = taxaIsenta / (1 - alíquota)');
+  });
+
+  test('não isento: não calcula taxa bruta equivalente', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.10 };
+    const r = calcularTaxaEquivalente({ ativoTaxa, dataBase, vencimento, isento: false }, curvas);
+    assert.equal(r.taxaBrutaEquivalentePct, undefined);
+  });
+});
+
+describe('calcularIR — Bruto / IR / Líquido a partir de um rendimento já conhecido', () => {
+  test('não isento: aplica a alíquota regressiva pelo prazo decorrido', () => {
+    const r = calcularIR({ valorBruto: 10000, dataBase, dataFinal: vencimento, isento: false });
+    assert.equal(r.dias, 365);
+    assertClose(r.aliquotaPct, 17.5, '365 dias corridos (>360 e <=720) cai na faixa de 17,5%');
+    assertClose(r.ir, 1750, 'IR = 10000 * 17,5%');
+    assertClose(r.valorLiquido, 8250, 'líquido = bruto - IR');
+  });
+
+  test('isento: IR zero e líquido = bruto', () => {
+    const r = calcularIR({ valorBruto: 10000, dataBase, dataFinal: vencimento, isento: true });
+    assertClose(r.ir, 0, 'isento: IR = 0');
+    assertClose(r.valorLiquido, 10000, 'isento: líquido = bruto');
+  });
+
+  test('prazo curto (≤180 dias) cai na faixa de 22,5%', () => {
+    const dataFinalCurta = new Date(2026, 5, 1); // ~150 dias corridos a partir de 01/01/2026
+    const r = calcularIR({ valorBruto: 2000, dataBase, dataFinal: dataFinalCurta, isento: false });
+    assertClose(r.aliquotaPct, 22.5, 'prazo curto cai na faixa de 22,5%');
   });
 });

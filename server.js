@@ -335,7 +335,7 @@ app.post('/api/calculadora', async (req, res) => {
     }
 
     if (modo === 'taxaEquivalente') {
-      const { tipo, taxa, dataBase, vencimento } = req.body;
+      const { tipo, taxa, dataBase, vencimento, isento } = req.body;
       if (!tipo || !dataBase || !vencimento || !(Number(taxa) > 0)) {
         return res.status(400).json({ erro: 'Preencha indexador, taxa (maior que 0), data-base e vencimento.' });
       }
@@ -343,7 +343,22 @@ app.post('/api/calculadora', async (req, res) => {
         ativoTaxa: montarAtivoTaxa(tipo, taxa),
         dataBase: parseDataLocal(dataBase),
         vencimento: parseDataLocal(vencimento),
+        isento: !!isento,
       }, curvas);
+      return res.json({ resultado });
+    }
+
+    if (modo === 'ir') {
+      const { valorBruto, dataBase, vencimento, isento } = req.body;
+      if (!dataBase || !vencimento || !(Number(valorBruto) > 0)) {
+        return res.status(400).json({ erro: 'Preencha o valor do rendimento bruto (maior que 0), a data-base e a data final.' });
+      }
+      const resultado = calculadora.calcularIR({
+        valorBruto: Number(valorBruto),
+        dataBase: parseDataLocal(dataBase),
+        dataFinal: parseDataLocal(vencimento),
+        isento: !!isento,
+      });
       return res.json({ resultado });
     }
 

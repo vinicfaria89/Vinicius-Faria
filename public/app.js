@@ -768,8 +768,17 @@ function calcFmtDataDDMMAAAA(isoDate) {
 
 // Botão "Copiar resumo" — aparece em todo resultado (qualquer modo), pra colar direto numa conversa
 // com o cliente. Pedido explícito do time comercial: é a função mais usada depois de calcular.
+// Nunca aparece sozinho como uma taxa "crua" — sempre junto do indexador contratado (ver
+// calcTaxaResumoLabel), porque pra ativos indexados (CDI+/IPCA+/% CDI) essa taxa efetiva anual é só
+// a leitura de HOJE das curvas de mercado, não um número fixo prometido ao cliente.
+const CALC_DISCLAIMER_TEXTO = 'Considera taxas e curvas de mercado do dia desta simulação — não é garantia de rentabilidade futura.';
+
+function calcDisclaimerHtml() {
+  return `<p style="font-size:9.5px; color:#8a886f; margin-top:10px; font-style:italic;">⚠️ ${CALC_DISCLAIMER_TEXTO}</p>`;
+}
+
 function calcBotaoCopiarHtml() {
-  return `<div style="margin-top:14px;"><button class="btn secondary small" type="button" id="calc-btn-copiar">📱 Copiar resumo</button></div>`;
+  return `${calcDisclaimerHtml()}<div style="margin-top:10px;"><button class="btn secondary small" type="button" id="calc-btn-copiar">📱 Copiar resumo</button></div>`;
 }
 
 function calcLigarBotaoCopiar() {
@@ -795,34 +804,33 @@ function calcMontarResumoWhatsapp() {
   const ctx = calcUltimoContexto;
   if (!ctx) return '';
   const { modo, r, taxaLabel, prazoTexto, vencimentoTexto } = ctx;
+  let texto = '';
   if (modo === 'vf') {
-    return `Simulação\n\nValor: ${fmtBRL(ctx.valorInvestido)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nRentabilidade: ${taxaLabel}\nValor líquido estimado: ${fmtBRL(r.vfLiquido)}`;
-  }
-  if (modo === 'vp') {
+    texto = `Simulação\n\nValor: ${fmtBRL(ctx.valorInvestido)}\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nValor líquido estimado: ${fmtBRL(r.vfLiquido)}`;
+  } else if (modo === 'vp') {
     const alvoLabel = r.tipoValorFuturo === 'liquido' ? 'Valor futuro líquido (alvo)' : 'Valor futuro bruto (alvo)';
     const alvoValor = r.tipoValorFuturo === 'liquido' ? r.vfLiquidoResultante : r.vfBruto;
-    return `Simulação\n\nValor a investir hoje: ${fmtBRL(r.viNecessario)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nRentabilidade: ${taxaLabel}\n${alvoLabel}: ${fmtBRL(alvoValor)}\nValor futuro líquido estimado: ${fmtBRL(r.vfLiquidoResultante)}`;
-  }
-  if (modo === 'rentabilidade') {
-    return `Simulação\n\nValor investido: ${fmtBRL(ctx.valorInvestido)}\nValor futuro: ${fmtBRL(ctx.valorFuturo)}\nPrazo: ${prazoTexto}\nRentabilidade: ${calcFmtPct(r.rentabilidadePct)} (${fmtBRL(r.rentabilidadeRS)})\nTaxa anualizada implícita: ${calcFmtPct(r.taxaAnualizadaPct)} a.a.`;
-  }
-  if (modo === 'taxaEquivalente') {
+    texto = `Simulação\n\nValor a investir hoje: ${fmtBRL(r.viNecessario)}\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\n${alvoLabel}: ${fmtBRL(alvoValor)}\nValor futuro líquido estimado: ${fmtBRL(r.vfLiquidoResultante)}`;
+  } else if (modo === 'rentabilidade') {
+    texto = `Simulação\n\nValor investido: ${fmtBRL(ctx.valorInvestido)}\nValor futuro: ${fmtBRL(ctx.valorFuturo)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nRentabilidade: ${calcFmtPct(r.rentabilidadePct)} (${fmtBRL(r.rentabilidadeRS)})\nTaxa anualizada implícita (equivalente hoje): ${calcFmtPct(r.taxaAnualizadaPct)} a.a.`;
+  } else if (modo === 'taxaEquivalente') {
     const brutaLinha = r.isento ? `\nTaxa bruta equivalente (produto tributado): ${calcFmtPct(r.taxaBrutaEquivalentePct)} a.a.` : '';
-    return `Simulação\n\nIndexador: ${taxaLabel}\nTaxa efetiva anual: ${calcFmtPct(r.iAnualPct)} a.a.\nEquivalente mensal: ${calcFmtPct(r.taxaMensalPct)} a.m.${brutaLinha}`;
-  }
-  if (modo === 'ir') {
-    return `Simulação de IR\n\nValor bruto: ${fmtBRL(r.valorBruto)}\nPrazo: ${prazoTexto}\nAlíquota de IR: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaPct)}\nIR: ${fmtBRL(r.ir)}\nValor líquido: ${fmtBRL(r.valorLiquido)}`;
-  }
-  if (modo === 'comparar') {
+    texto = `Simulação\n\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nTaxa efetiva anual (equivalente hoje): ${calcFmtPct(r.iAnualPct)} a.a.\nEquivalente mensal: ${calcFmtPct(r.taxaMensalPct)} a.m.${brutaLinha}`;
+  } else if (modo === 'ir') {
+    texto = `Simulação de IR\n\nValor bruto: ${fmtBRL(r.valorBruto)}\nPrazo: ${prazoTexto}\nAlíquota de IR: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaPct)}\nIR: ${fmtBRL(r.ir)}\nValor líquido: ${fmtBRL(r.valorLiquido)}`;
+  } else if (modo === 'comparar') {
     const { rA, rB, taxaLabelA, taxaLabelB } = ctx;
     const melhor = rA.vfLiquido >= rB.vfLiquido ? 'A' : 'B';
-    return `Comparação de Ativos\n\nValor: ${fmtBRL(ctx.valorInvestido)}\nPrazo: ${prazoTexto}\n\nProduto A (${taxaLabelA}): líquido ${fmtBRL(rA.vfLiquido)}\nProduto B (${taxaLabelB}): líquido ${fmtBRL(rB.vfLiquido)}\n\nMelhor opção: Produto ${melhor}`;
+    texto = `Comparação de Ativos\n\nValor: ${fmtBRL(ctx.valorInvestido)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\n\nProduto A — Indexador: ${taxaLabelA} — líquido ${fmtBRL(rA.vfLiquido)}\nProduto B — Indexador: ${taxaLabelB} — líquido ${fmtBRL(rB.vfLiquido)}\n\nMelhor opção: Produto ${melhor}`;
+  } else if (modo === 'rendaPassiva') {
+    const linhas = r.resultados.map((item) => {
+      const label = item.taxaLabel || calcFmtPct(item.iAnualPct);
+      return `${item.nome || 'Ativo'} — Indexador: ${label} — Vencimento: ${item.vencimentoTexto || '—'} — ${fmtBRL(item.rendaMensalEquivalente)}/mês`;
+    }).join('\n');
+    texto = `Renda Passiva Estimada\n\n${linhas}\n\nTotal: ${fmtBRL(r.rendaMensalTotal)}/mês (${fmtBRL(r.rendaAnualTotal)}/ano)\nValor total investido: ${fmtBRL(r.viTotal)}`;
   }
-  if (modo === 'rendaPassiva') {
-    const linhas = r.resultados.map((item) => `${item.nome || 'Ativo'}: ${fmtBRL(item.rendaMensalEquivalente)}/mês`).join('\n');
-    return `Renda Passiva Estimada\n\n${linhas}\n\nTotal: ${fmtBRL(r.rendaMensalTotal)}/mês (${fmtBRL(r.rendaAnualTotal)}/ano)\nValor total investido: ${fmtBRL(r.viTotal)}`;
-  }
-  return '';
+  if (!texto) return '';
+  return `${texto}\n\n⚠️ ${CALC_DISCLAIMER_TEXTO}`;
 }
 
 function calcRenderResultado(modo, r) {
@@ -832,10 +840,11 @@ function calcRenderResultado(modo, r) {
     el.innerHTML = `
       <div class="cr-principal"><span class="lbl">Valor Futuro Líquido</span>${fmtBRL(r.vfLiquido)}</div>
       <div class="calc-grid">
+        <div class="ci"><div class="lbl">Indexador Contratado</div><div class="val">${escapeHtmlCalc(calcUltimoContexto.taxaLabel)}</div></div>
         <div class="ci"><div class="lbl">Valor Futuro Bruto</div><div class="val">${fmtBRL(r.vfBruto)}</div></div>
         <div class="ci"><div class="lbl">Imposto de Renda</div><div class="val">${fmtBRL(r.ir)}</div></div>
         <div class="ci"><div class="lbl">Alíquota de IR</div><div class="val">${isentoLabel(calcUltimoContexto && calcUltimoContexto.isento) || calcFmtPct(r.aliquotaPct)}</div></div>
-        <div class="ci"><div class="lbl">Taxa Efetiva</div><div class="val">${calcFmtPct(r.iAnualPct)} a.a.</div></div>
+        <div class="ci"><div class="lbl">Taxa Efetiva Equivalente (hoje)</div><div class="val">${calcFmtPct(r.iAnualPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">Rentabilidade Líquida</div><div class="val">${calcFmtPct(r.rentabilidadePct)}</div></div>
         <div class="ci"><div class="lbl">Rent. Anualizada</div><div class="val">${calcFmtPct(r.rentabilidadeAnualizadaPct)}</div></div>
         <div class="ci"><div class="lbl">% do CDI (no período)</div><div class="val">${r.pctCdi == null ? '—' : `≈${Math.round(r.pctCdi)}%`}</div></div>
@@ -845,20 +854,22 @@ function calcRenderResultado(modo, r) {
     el.innerHTML = `
       <div class="cr-principal"><span class="lbl">Valor a Investir Hoje</span>${fmtBRL(r.viNecessario)}</div>
       <div class="calc-grid">
+        <div class="ci"><div class="lbl">Indexador Contratado</div><div class="val">${escapeHtmlCalc(calcUltimoContexto.taxaLabel)}</div></div>
         <div class="ci"><div class="lbl">Valor Futuro Bruto${r.tipoValorFuturo === 'bruto' ? ' (alvo)' : ''}</div><div class="val">${fmtBRL(r.vfBruto)}</div></div>
         <div class="ci"><div class="lbl">Imposto de Renda</div><div class="val">${fmtBRL(r.ir)}</div></div>
         <div class="ci"><div class="lbl">Alíquota de IR</div><div class="val">${isentoLabel(calcUltimoContexto && calcUltimoContexto.isento) || calcFmtPct(r.aliquotaPct)}</div></div>
         <div class="ci"><div class="lbl">Valor Futuro Líquido${r.tipoValorFuturo === 'liquido' ? ' (alvo)' : ''}</div><div class="val">${fmtBRL(r.vfLiquidoResultante)}</div></div>
-        <div class="ci"><div class="lbl">Taxa Efetiva</div><div class="val">${calcFmtPct(r.iAnualPct)} a.a.</div></div>
+        <div class="ci"><div class="lbl">Taxa Efetiva Equivalente (hoje)</div><div class="val">${calcFmtPct(r.iAnualPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.dias} dias (${r.du} du)</div></div>
       </div>${calcBotaoCopiarHtml()}`;
   } else if (modo === 'rentabilidade') {
     el.innerHTML = `
       <div class="cr-principal"><span class="lbl">Rentabilidade</span>${calcFmtPct(r.rentabilidadePct)} <span style="font-size:14px; color:#5a5847; font-weight:600;">(${fmtBRL(r.rentabilidadeRS)})</span></div>
       <div class="calc-grid">
-        <div class="ci"><div class="lbl">Taxa Anualizada Implícita</div><div class="val">${calcFmtPct(r.taxaAnualizadaPct)} a.a.</div></div>
+        <div class="ci"><div class="lbl">Taxa Anualizada Implícita (equivalente hoje)</div><div class="val">${calcFmtPct(r.taxaAnualizadaPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">% do CDI (no período)</div><div class="val">${r.pctCdi == null ? '—' : `≈${Math.round(r.pctCdi)}%`}</div></div>
         <div class="ci"><div class="lbl">CDI de Referência</div><div class="val">${calcFmtPct(r.cdiRefPct)} a.a.</div></div>
+        <div class="ci"><div class="lbl">Vencimento</div><div class="val">${calcUltimoContexto.vencimentoTexto}</div></div>
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.dias} dias (${r.du} du)</div></div>
       </div>${calcBotaoCopiarHtml()}`;
   } else if (modo === 'taxaEquivalente') {
@@ -866,11 +877,13 @@ function calcRenderResultado(modo, r) {
       ? `<div class="ci"><div class="lbl">Taxa Bruta Equivalente</div><div class="val">${calcFmtPct(r.taxaBrutaEquivalentePct)} a.a.</div></div>`
       : '';
     el.innerHTML = `
-      <div class="cr-principal"><span class="lbl">Taxa Efetiva Anual</span>${calcFmtPct(r.iAnualPct)} a.a.</div>
+      <div class="cr-principal"><span class="lbl">Taxa Efetiva Anual (equivalente hoje)</span>${calcFmtPct(r.iAnualPct)} a.a.</div>
       <div class="calc-grid">
+        <div class="ci"><div class="lbl">Indexador Contratado</div><div class="val">${escapeHtmlCalc(calcUltimoContexto.taxaLabel)}</div></div>
         <div class="ci"><div class="lbl">Equivalente Mensal</div><div class="val">${calcFmtPct(r.taxaMensalPct)} a.m.</div></div>
         <div class="ci"><div class="lbl">CDI de Referência (no prazo)</div><div class="val">${calcFmtPct(r.cdiRefPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">Equivale a % do CDI</div><div class="val">${r.pctCdiEquivalente == null ? '—' : `≈${Math.round(r.pctCdiEquivalente)}%`}</div></div>
+        <div class="ci"><div class="lbl">Vencimento</div><div class="val">${calcUltimoContexto.vencimentoTexto}</div></div>
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.du} dias úteis</div></div>
         ${brutaHtml}
       </div>${r.isento ? '<p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Taxa bruta equivalente: o que um produto TRIBUTADO precisaria pagar, antes do IR, para entregar o mesmo retorno líquido que este produto isento.</p>' : ''}${calcBotaoCopiarHtml()}`;
@@ -881,6 +894,7 @@ function calcRenderResultado(modo, r) {
         <div class="ci"><div class="lbl">Valor Bruto</div><div class="val">${fmtBRL(r.valorBruto)}</div></div>
         <div class="ci"><div class="lbl">Alíquota de IR</div><div class="val">${r.isento ? 'Isento' : calcFmtPct(r.aliquotaPct)}</div></div>
         <div class="ci"><div class="lbl">Imposto de Renda</div><div class="val">${fmtBRL(r.ir)}</div></div>
+        <div class="ci"><div class="lbl">Data Final</div><div class="val">${calcUltimoContexto.vencimentoTexto}</div></div>
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.dias} dias</div></div>
       </div>${calcBotaoCopiarHtml()}`;
   }
@@ -906,7 +920,9 @@ function calcRenderComparacao(rA, rB, taxaLabelA, taxaLabelB) {
       </div>
     </div>`;
   const diferenca = Math.abs(rA.vfLiquido - rB.vfLiquido);
+  const ctx = calcUltimoContexto;
   el.innerHTML = `
+    <p style="text-align:center; font-size:10.5px; color:#8a886f; margin-bottom:10px;">${fmtBRL(ctx.valorInvestido)} investidos · prazo ${ctx.prazoTexto} · vencimento ${ctx.vencimentoTexto}</p>
     <div class="calc-comparar-grid">
       ${linhaProduto(rA, taxaLabelA, aVence)}
       <div class="calc-comparar-vs">VS</div>
@@ -977,10 +993,14 @@ document.getElementById('calc-rp-adicionar').addEventListener('click', () => {
 function calcRenderRendaPassiva(resultado) {
   const el = document.getElementById('calc-resultado');
   const itens = resultado.resultados.map((r) => {
-    const periodicidadeLabel = r.periodicidadeCupom === 'semestral' ? 'semestral — equivalente mensal' : 'mensal';
+    const periodicidadeLabel = r.periodicidadeCupom === 'semestral' ? 'semestral — convertido pra base mensal' : 'mensal';
+    // Nunca mostra só a taxa efetiva "crua" (ex.: "13,68% a.a.") — pra ativos indexados (CDI+/IPCA+/%
+    // CDI) esse número é só a leitura de hoje das curvas, não o que está contratado. O indexador
+    // (ex.: "IPCA+7,00%") é o que de fato foi informado e o que continua valendo amanhã.
+    const label = r.taxaLabel || calcFmtPct(r.iAnualPct);
     return `<div class="calc-rp-resultado-item">
       <div class="nome">${escapeHtmlCalc(r.nome || 'Ativo')}</div>
-      <div class="sub">${fmtBRL(r.vi)} investidos · ${calcFmtPct(r.iAnualPct)} a.a. · pagamento ${periodicidadeLabel}${r.isento ? ' · isento' : ''}</div>
+      <div class="sub">${fmtBRL(r.vi)} investidos · Indexador: ${escapeHtmlCalc(label)} · vence ${r.vencimentoTexto || '—'} · pagamento ${periodicidadeLabel}${r.isento ? ' · isento' : ''}</div>
       <div class="valor">${fmtBRL(r.rendaMensalEquivalente)} / mês</div>
     </div>`;
   }).join('');
@@ -1028,6 +1048,14 @@ document.getElementById('calc-rp-calcular').addEventListener('click', async () =
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.erro || 'Falha ao calcular.');
+    // O backend devolve só o iAnualPct (número já convertido) — junta de volta o indexador/taxa
+    // originalmente digitados (calcTaxaResumoLabel) e o vencimento, pra nunca exibir só a taxa
+    // efetiva "crua" como se fosse um número fixo prometido ao cliente.
+    data.resultado.resultados = data.resultado.resultados.map((item, i) => ({
+      ...item,
+      taxaLabel: calcTaxaResumoLabel(ativos[i].tipo, ativos[i].taxa),
+      vencimentoTexto: calcFmtDataDDMMAAAA(ativos[i].vencimento),
+    }));
     calcUltimoContexto = { modo: 'rendaPassiva', r: data.resultado };
     calcRenderRendaPassiva(data.resultado);
   } catch (err) {

@@ -827,7 +827,7 @@ function calcMontarResumoWhatsapp() {
       const label = item.taxaLabel || calcFmtPct(item.iAnualPct);
       return `${item.nome || 'Ativo'} — Indexador: ${label} — Vencimento: ${item.vencimentoTexto || '—'} — ${fmtBRL(item.rendaMensalEquivalente)}/mês`;
     }).join('\n');
-    texto = `Renda Passiva Estimada\n\n${linhas}\n\nTotal: ${fmtBRL(r.rendaMensalTotal)}/mês (${fmtBRL(r.rendaAnualTotal)}/ano)\nValor total investido: ${fmtBRL(r.viTotal)}`;
+    texto = `Renda Passiva Líquida Estimada\n\n${linhas}\n\nTotal líquido: ${fmtBRL(r.rendaMensalTotal)}/mês (${fmtBRL(r.rendaAnualTotal)}/ano)\nValor total investido: ${fmtBRL(r.viTotal)}`;
   }
   if (!texto) return '';
   return `${texto}\n\n⚠️ ${CALC_DISCLAIMER_TEXTO}`;
@@ -1005,11 +1005,11 @@ function calcRenderRendaPassiva(resultado) {
     </div>`;
   }).join('');
   el.innerHTML = `
-    <div class="cr-principal"><span class="lbl">Renda Mensal Total Estimada</span>${fmtBRL(resultado.rendaMensalTotal)}</div>
+    <div class="cr-principal"><span class="lbl">Renda Mensal Líquida Total Estimada</span>${fmtBRL(resultado.rendaMensalTotal)}</div>
     <div class="calc-grid" style="grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); margin-bottom:14px;">
-      <div class="ci"><div class="lbl">Renda Anual Estimada</div><div class="val">${fmtBRL(resultado.rendaAnualTotal)}</div></div>
+      <div class="ci"><div class="lbl">Renda Anual Líquida Estimada</div><div class="val">${fmtBRL(resultado.rendaAnualTotal)}</div></div>
       <div class="ci"><div class="lbl">Valor Total Investido</div><div class="val">${fmtBRL(resultado.viTotal)}</div></div>
-      <div class="ci"><div class="lbl">Rendimento Mensal (% do total)</div><div class="val">${resultado.rendimentoMensalPct == null ? '—' : calcFmtPct(resultado.rendimentoMensalPct)}</div></div>
+      <div class="ci"><div class="lbl">Rendimento Mensal Líquido (% do total)</div><div class="val">${resultado.rendimentoMensalPct == null ? '—' : calcFmtPct(resultado.rendimentoMensalPct)}</div></div>
     </div>
     <div class="calc-grid" style="grid-template-columns:repeat(auto-fit, minmax(220px,1fr));">${itens}</div>
     ${calcBotaoCopiarHtml()}`;

@@ -696,6 +696,16 @@ function calcAtualizarCamposVisiveis() {
   document.getElementById('calculadoraForm').style.display = cfg.custom ? 'none' : '';
   document.getElementById('calc-rendaPassiva-painel').style.display = cfg.custom ? '' : 'none';
   if (cfg.custom) {
+    // calc-campo-comparar fica FORA do <form> (é compartilhado entre modos) — escondê-lo aqui
+    // também é obrigatório, senão o botão "Comparar" (e o estado calcComparando) vaza de um modo
+    // anterior (ex.: Valor Futuro) pra dentro da Renda Passiva, aparentando estar "travado": o
+    // botão fica visível, mas o painel que ele abriria está dentro do form escondido.
+    document.getElementById('calc-campo-comparar').style.display = 'none';
+    if (calcComparando) {
+      calcComparando = false;
+      document.getElementById('calc-linha-produtoB').style.display = 'none';
+      document.getElementById('calc-toggleComparar').textContent = '⚖️ Comparar com outro produto';
+    }
     document.getElementById('calc-resultado').className = 'calc-resultado';
     document.getElementById('calc-erro').style.display = 'none';
     return;

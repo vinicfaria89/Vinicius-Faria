@@ -676,6 +676,7 @@ const CALC_MODOS = {
   rentabilidade: { showIndexador: false, showIsento: false, showVI: true, showVF: true, showValorBruto: false, showComparar: false, showTipoVF: false, vfLabel: 'Valor Futuro (conhecido)', vencimentoLabel: 'Data Final' },
   taxaEquivalente: { showIndexador: true, showIsento: true, showVI: false, showVF: false, showValorBruto: false, showComparar: false, showTipoVF: false, vencimentoLabel: 'Vencimento' },
   ir: { showIndexador: false, showIsento: true, showVI: false, showVF: false, showValorBruto: true, showComparar: false, showTipoVF: false, vencimentoLabel: 'Data Final (resgate)' },
+  rendaPassiva: { custom: true },
 };
 let calcModoAtual = 'vf';
 let calcComparando = false;
@@ -692,6 +693,13 @@ let calcUltimoContexto = null; // guarda o payload/label do último cálculo, pr
 
 function calcAtualizarCamposVisiveis() {
   const cfg = CALC_MODOS[calcModoAtual];
+  document.getElementById('calculadoraForm').style.display = cfg.custom ? 'none' : '';
+  document.getElementById('calc-rendaPassiva-painel').style.display = cfg.custom ? '' : 'none';
+  if (cfg.custom) {
+    document.getElementById('calc-resultado').className = 'calc-resultado';
+    document.getElementById('calc-erro').style.display = 'none';
+    return;
+  }
   document.getElementById('calc-linha-indexador').style.display = cfg.showIndexador ? '' : 'none';
   document.getElementById('calc-campo-isento').style.display = cfg.showIsento ? '' : 'none';
   document.getElementById('calc-campo-vi').style.display = cfg.showVI ? '' : 'none';
@@ -810,6 +818,10 @@ function calcMontarResumoWhatsapp() {
     const melhor = rA.vfLiquido >= rB.vfLiquido ? 'A' : 'B';
     return `Comparação de Ativos\n\nValor: ${fmtBRL(ctx.valorInvestido)}\nPrazo: ${prazoTexto}\n\nProduto A (${taxaLabelA}): líquido ${fmtBRL(rA.vfLiquido)}\nProduto B (${taxaLabelB}): líquido ${fmtBRL(rB.vfLiquido)}\n\nMelhor opção: Produto ${melhor}`;
   }
+  if (modo === 'rendaPassiva') {
+    const linhas = r.resultados.map((item) => `${item.nome || 'Ativo'}: ${fmtBRL(item.rendaMensalEquivalente)}/mês`).join('\n');
+    return `Renda Passiva Estimada\n\n${linhas}\n\nTotal: ${fmtBRL(r.rendaMensalTotal)}/mês (${fmtBRL(r.rendaAnualTotal)}/ano)\nValor total investido: ${fmtBRL(r.viTotal)}`;
+  }
   return '';
 }
 
@@ -909,6 +921,120 @@ function calcRenderComparacao(rA, rB, taxaLabelA, taxaLabelB) {
 function escapeHtmlCalc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// --- Renda Passiva: lista dinâmica de ativos (1 ou vários), cada um com pagamento periódico de
+// juros — soma tudo numa renda mensal combinada. Diferente dos outros modos (um único formulário
+// fixo), aqui a UI é uma lista de cards que crescem/encolhem, então tem lógica própria de
+// adicionar/remover em vez de só alternar a visibilidade de campos fixos. ---
+function calcHojeISO() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+}
+
+function calcCriarCardRendaPassiva() {
+  const div = document.createElement('div');
+  div.className = 'calc-rp-card';
+  div.innerHTML = `
+    <div class="calc-rp-topo">
+      <span class="calc-rp-titulo">Ativo</span>
+      <button class="btn secondary small calc-rp-remover" type="button">Remover</button>
+    </div>
+    <div class="grid3">
+      <div><label>Nome (opcional)</label><input type="text" class="calc-rp-nome" placeholder="CRI Shopping X"></div>
+      <div><label>Indexador</label><select class="calc-rp-tipo">
+        <option value="fixo">Prefixado (a.m.)</option>
+        <option value="fixoAA">Prefixado (a.a.)</option>
+        <option value="cdi">CDI +</option>
+        <option value="ipca" selected>IPCA +</option>
+        <option value="pctcdi">% CDI</option>
+      </select></div>
+      <div><label>Taxa</label><input type="number" step="0.01" min="0" class="calc-rp-taxa" placeholder="8"></div>
+    </div>
+    <div class="grid3" style="margin-top:10px;">
+      <div><label>Data-base</label><input type="date" class="calc-rp-dataBase" value="${calcHojeISO()}"></div>
+      <div><label>Vencimento</label><input type="date" class="calc-rp-vencimento"></div>
+      <div><label>Valor Investido</label><input type="number" step="0.01" min="0" class="calc-rp-valorInvestido" placeholder="50000"></div>
+    </div>
+    <div class="grid3" style="margin-top:10px;">
+      <div><label>Periodicidade do Cupom</label><select class="calc-rp-periodicidade">
+        <option value="mensal">Mensal</option>
+        <option value="semestral">Semestral</option>
+      </select></div>
+      <div class="field-inline" style="align-self:end; margin-bottom:8px;"><input type="checkbox" class="calc-rp-isento"> Isento de IR</div>
+    </div>`;
+  div.querySelector('.calc-rp-remover').addEventListener('click', () => {
+    const lista = document.getElementById('calc-rp-lista');
+    if (lista.children.length > 1) div.remove();
+  });
+  return div;
+}
+
+document.getElementById('calc-rp-lista').appendChild(calcCriarCardRendaPassiva());
+document.getElementById('calc-rp-adicionar').addEventListener('click', () => {
+  document.getElementById('calc-rp-lista').appendChild(calcCriarCardRendaPassiva());
+});
+
+function calcRenderRendaPassiva(resultado) {
+  const el = document.getElementById('calc-resultado');
+  const itens = resultado.resultados.map((r) => {
+    const periodicidadeLabel = r.periodicidadeCupom === 'semestral' ? 'semestral — equivalente mensal' : 'mensal';
+    return `<div class="calc-rp-resultado-item">
+      <div class="nome">${escapeHtmlCalc(r.nome || 'Ativo')}</div>
+      <div class="sub">${fmtBRL(r.vi)} investidos · ${calcFmtPct(r.iAnualPct)} a.a. · pagamento ${periodicidadeLabel}${r.isento ? ' · isento' : ''}</div>
+      <div class="valor">${fmtBRL(r.rendaMensalEquivalente)} / mês</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="cr-principal"><span class="lbl">Renda Mensal Total Estimada</span>${fmtBRL(resultado.rendaMensalTotal)}</div>
+    <div class="calc-grid" style="grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); margin-bottom:14px;">
+      <div class="ci"><div class="lbl">Renda Anual Estimada</div><div class="val">${fmtBRL(resultado.rendaAnualTotal)}</div></div>
+      <div class="ci"><div class="lbl">Valor Total Investido</div><div class="val">${fmtBRL(resultado.viTotal)}</div></div>
+      <div class="ci"><div class="lbl">Rendimento Mensal (% do total)</div><div class="val">${resultado.rendimentoMensalPct == null ? '—' : calcFmtPct(resultado.rendimentoMensalPct)}</div></div>
+    </div>
+    <div class="calc-grid" style="grid-template-columns:repeat(auto-fit, minmax(220px,1fr));">${itens}</div>
+    ${calcBotaoCopiarHtml()}`;
+  el.classList.add('show');
+  calcLigarBotaoCopiar();
+}
+
+document.getElementById('calc-rp-calcular').addEventListener('click', async () => {
+  const erroEl = document.getElementById('calc-erro');
+  erroEl.style.display = 'none';
+  document.getElementById('calc-resultado').classList.remove('show');
+
+  const cards = Array.from(document.querySelectorAll('#calc-rp-lista .calc-rp-card'));
+  const ativos = cards.map((card) => ({
+    nome: card.querySelector('.calc-rp-nome').value.trim(),
+    tipo: card.querySelector('.calc-rp-tipo').value,
+    taxa: Number(card.querySelector('.calc-rp-taxa').value || 0),
+    dataBase: card.querySelector('.calc-rp-dataBase').value,
+    vencimento: card.querySelector('.calc-rp-vencimento').value,
+    valorInvestido: Number(card.querySelector('.calc-rp-valorInvestido').value || 0),
+    periodicidadeCupom: card.querySelector('.calc-rp-periodicidade').value,
+    isento: card.querySelector('.calc-rp-isento').checked,
+  }));
+
+  if (ativos.some((a) => a.taxa < 0 || a.valorInvestido < 0)) {
+    erroEl.textContent = 'Taxa e valores não podem ser negativos.';
+    erroEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const resp = await fetch('/api/calculadora', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modo: 'rendaPassiva', ativos }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.erro || 'Falha ao calcular.');
+    calcUltimoContexto = { modo: 'rendaPassiva', r: data.resultado };
+    calcRenderRendaPassiva(data.resultado);
+  } catch (err) {
+    erroEl.textContent = `Erro: ${err.message}`;
+    erroEl.style.display = 'block';
+  }
+});
 
 document.getElementById('calculadoraForm').addEventListener('submit', async (e) => {
   e.preventDefault();

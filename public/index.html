@@ -152,6 +152,13 @@
   .calc-comparar-selo { position:absolute; top:-10px; right:12px; background:#2c2c1a; color:#c9e3a3; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.03em; padding:3px 9px; border-radius:999px; }
   .calc-comparar-titulo { font-size:13px; font-weight:800; color:#1f1f14; margin-bottom:8px; }
   .calc-comparar-vs { align-self:center; font-size:13px; font-weight:800; color:#8a886f; text-align:center; }
+  .calc-rp-card { background:#f4f2ea; border:1px solid #e3e0d3; border-radius:10px; padding:14px 16px; margin-top:10px; }
+  .calc-rp-card .calc-rp-topo { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .calc-rp-card .calc-rp-titulo { font-size:11.5px; font-weight:800; color:#5a5847; text-transform:uppercase; letter-spacing:0.03em; }
+  .calc-rp-resultado-item { background:#fff; border:1px solid #e3e0d3; border-radius:8px; padding:10px 12px; }
+  .calc-rp-resultado-item .nome { font-size:11px; font-weight:800; color:#1f1f14; margin-bottom:2px; }
+  .calc-rp-resultado-item .sub { font-size:9.5px; color:#8a886f; margin-bottom:4px; }
+  .calc-rp-resultado-item .valor { font-size:14px; font-weight:700; color:#1f1f14; }
   @media (max-width: 720px) {
     .calc-comparar-grid { grid-template-columns:1fr; }
     .calc-comparar-vs { padding:4px 0; }
@@ -432,6 +439,7 @@
       <button class="calc-modo-btn" data-modo="rentabilidade" type="button">Rentabilidade</button>
       <button class="calc-modo-btn" data-modo="taxaEquivalente" type="button">Taxa Equivalente</button>
       <button class="calc-modo-btn" data-modo="ir" type="button">Simulador de IR</button>
+      <button class="calc-modo-btn" data-modo="rendaPassiva" type="button">💰 Renda Passiva</button>
     </div>
 
     <div id="calc-campo-comparar" style="margin-bottom:14px;">
@@ -511,6 +519,17 @@
         <button class="btn" type="submit">Calcular</button>
       </div>
     </form>
+
+    <div id="calc-rendaPassiva-painel" style="display:none;">
+      <p style="font-size:11.5px; color:#5a5847; margin:0 0 12px;">Adicione um ou vários ativos com pagamento periódico de juros (mensal ou semestral) e veja quanto cada um — e o total — renderia por mês. Útil pra quem já vive, ou está planejando viver, de renda de investimentos.</p>
+      <div id="calc-rp-lista"></div>
+      <div class="row-actions" style="margin-top:10px;">
+        <button class="btn secondary small" id="calc-rp-adicionar" type="button">+ Adicionar Ativo</button>
+      </div>
+      <div class="row-actions">
+        <button class="btn" id="calc-rp-calcular" type="button">Calcular Renda Passiva</button>
+      </div>
+    </div>
 
     <div class="calc-erro" id="calc-erro" style="display:none;"></div>
     <div class="calc-resultado" id="calc-resultado"></div>

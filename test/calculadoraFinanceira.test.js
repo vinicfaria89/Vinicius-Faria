@@ -8,6 +8,7 @@ const {
   calcularRentabilidade,
   calcularTaxaEquivalente,
   calcularIR,
+  calcularRendaPassiva,
 } = require('../lib/calculadoraFinanceira');
 
 const EPS = 1e-6;
@@ -148,5 +149,47 @@ describe('calcularIR — Bruto / IR / Líquido a partir de um rendimento já con
     const dataFinalCurta = new Date(2026, 5, 1); // ~150 dias corridos a partir de 01/01/2026
     const r = calcularIR({ valorBruto: 2000, dataBase, dataFinal: dataFinalCurta, isento: false });
     assertClose(r.aliquotaPct, 22.5, 'prazo curto cai na faixa de 22,5%');
+  });
+});
+
+describe('calcularRendaPassiva — soma de renda mensal de um ou vários ativos com cupom periódico', () => {
+  test('um único ativo mensal bate exatamente com calcularAtivo (Caso A)', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.12 };
+    const ativos = [{ nome: 'CRI Teste', ativoTaxa, dataBase, vencimento, isento: false, valorInvestido: 100000, periodicidadeCupom: 'mensal' }];
+    const r = calcularRendaPassiva({ ativos }, curvas);
+
+    const calcDireto = calcularAtivo({ ...ativoTaxa, vi: 100000, dataBase, vencimento, isento: false, pagaCupomMensal: true, reinvestir: false, periodicidadeCupom: 'mensal', cashSweep: false }, curvas);
+    const mediaEsperada = calcDireto.cupomLiquidos.reduce((s, v) => s + v, 0) / calcDireto.cupomLiquidos.length;
+
+    assertClose(r.resultados[0].cupomMedioLiq, mediaEsperada, 'média dos cupons líquidos bate com calcularAtivo');
+    assertClose(r.resultados[0].rendaMensalEquivalente, mediaEsperada, 'mensal: renda mensal equivalente = média do cupom');
+    assertClose(r.rendaMensalTotal, mediaEsperada, 'total = único ativo');
+    assertClose(r.rendaAnualTotal, mediaEsperada * 12, 'anual = mensal * 12');
+  });
+
+  test('ativo semestral converte pra base mensal dividindo por 6', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.12 };
+    const ativos = [{ nome: 'Debênture Semestral', ativoTaxa, dataBase, vencimento, isento: true, valorInvestido: 100000, periodicidadeCupom: 'semestral' }];
+    const r = calcularRendaPassiva({ ativos }, curvas);
+    assertClose(r.resultados[0].rendaMensalEquivalente, r.resultados[0].cupomMedioLiq / 6, 'semestral: mensal equivalente = cupom médio / 6');
+  });
+
+  test('vários ativos: total soma corretamente as rendas mensais individuais', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.12 };
+    const ativos = [
+      { nome: 'A', ativoTaxa, dataBase, vencimento, isento: false, valorInvestido: 50000, periodicidadeCupom: 'mensal' },
+      { nome: 'B', ativoTaxa, dataBase, vencimento, isento: true, valorInvestido: 30000, periodicidadeCupom: 'semestral' },
+    ];
+    const r = calcularRendaPassiva({ ativos }, curvas);
+    assertClose(r.viTotal, 80000, 'VI total soma os dois ativos');
+    assertClose(r.rendaMensalTotal, r.resultados[0].rendaMensalEquivalente + r.resultados[1].rendaMensalEquivalente, 'total = soma dos individuais');
+  });
+
+  test('isento: cupom líquido = cupom bruto (sem desconto de IR)', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.12 };
+    const ativos = [{ nome: 'Isento', ativoTaxa, dataBase, vencimento, isento: true, valorInvestido: 100000, periodicidadeCupom: 'mensal' }];
+    const r = calcularRendaPassiva({ ativos }, curvas);
+    const calcDireto = calcularAtivo({ ...ativoTaxa, vi: 100000, dataBase, vencimento, isento: true, pagaCupomMensal: true, reinvestir: false, periodicidadeCupom: 'mensal', cashSweep: false }, curvas);
+    assertClose(r.resultados[0].cupomMedioLiq, calcDireto.cupomBruto, 'isento: cupom líquido médio = cupom bruto (constante todo período)');
   });
 });

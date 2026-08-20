@@ -363,6 +363,30 @@ app.post('/api/calculadora', async (req, res) => {
       return res.json({ resultado });
     }
 
+    if (modo === 'rendaPassiva') {
+      const ativosRaw = Array.isArray(req.body.ativos) ? req.body.ativos : [];
+      if (!ativosRaw.length) {
+        return res.status(400).json({ erro: 'Adicione ao menos um ativo.' });
+      }
+      for (let i = 0; i < ativosRaw.length; i += 1) {
+        const a = ativosRaw[i];
+        if (!a.tipo || !a.dataBase || !a.vencimento || !(Number(a.valorInvestido) > 0) || !(Number(a.taxa) > 0)) {
+          return res.status(400).json({ erro: `Ativo ${i + 1}: preencha indexador, taxa (maior que 0), data-base, vencimento e valor investido (maior que 0).` });
+        }
+      }
+      const ativos = ativosRaw.map((a) => ({
+        nome: (a.nome || '').trim(),
+        ativoTaxa: montarAtivoTaxa(a.tipo, a.taxa),
+        dataBase: parseDataLocal(a.dataBase),
+        vencimento: parseDataLocal(a.vencimento),
+        isento: !!a.isento,
+        valorInvestido: Number(a.valorInvestido),
+        periodicidadeCupom: a.periodicidadeCupom === 'semestral' ? 'semestral' : 'mensal',
+      }));
+      const resultado = calculadora.calcularRendaPassiva({ ativos }, curvas);
+      return res.json({ resultado });
+    }
+
     res.status(400).json({ erro: `Modo de cálculo desconhecido: ${modo}` });
   } catch (err) {
     console.error('[calculadora] falha ao calcular:', err);

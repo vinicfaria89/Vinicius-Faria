@@ -712,13 +712,11 @@ function calcAtualizarCamposVisiveis() {
   }
   document.getElementById('calc-linha-indexador').style.display = cfg.showIndexador ? '' : 'none';
   document.getElementById('calc-campo-isento').style.display = cfg.showIsento ? '' : 'none';
-  // Taxa Equivalente é hoje um comparador específico dos 2 produtos de debênture da GCB (bruta vs.
-  // Private/isenta), sempre pré-fixada — troca o select genérico de Indexador + checkbox Isento
-  // pelos 2 botões com o nome real do produto, e força o indexador pra fixoAA por baixo dos panos.
+  // Taxa Equivalente é o comparador dos 2 produtos de debênture da GCB (bruta vs. Private/isenta),
+  // pros 4 indexadores — troca só o checkbox "Isento de IR" pelos 2 botões com o nome real do
+  // produto (o Indexador continua igual aos outros modos, o assessor escolhe Pré/CDI+/IPCA+/% CDI).
   document.getElementById('calc-campo-tipoDebenture').style.display = cfg.showTipoDebenture ? '' : 'none';
-  document.getElementById('calc-indexador-select-wrap').style.display = cfg.showTipoDebenture ? 'none' : '';
   if (cfg.showTipoDebenture) {
-    document.getElementById('cf-tipo').value = 'fixoAA';
     document.getElementById('calc-tipoDeb-bruta').classList.add('ativo');
     document.getElementById('calc-tipoDeb-private').classList.remove('ativo');
     document.getElementById('cf-isento').checked = false;
@@ -852,7 +850,7 @@ function calcMontarResumoWhatsapp() {
     const equivalenteMensalPct = r.isento
       ? (Math.pow(1 + equivalenteAnualPct / 100, 1 / 12) - 1) * 100
       : r.taxaMensalLiquidaPct;
-    texto = `Equivalência de Debêntures\n\n${nomeInformado}: ${calcFmtPct(r.iAnualPct)} a.a. (${calcFmtPct(r.taxaMensalPct)} a.m.)\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\n\nEquivale, líquido, em ${nomeEquivalente}: ${calcFmtPct(equivalenteAnualPct)} a.a. (${calcFmtPct(equivalenteMensalPct)} a.m.)`;
+    texto = `Equivalência de Debêntures\n\n${nomeInformado}\nIndexador: ${taxaLabel}\nTaxa efetiva: ${calcFmtPct(r.iAnualPct)} a.a. (${calcFmtPct(r.taxaMensalPct)} a.m.)\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\n\nEquivale, líquido, em ${nomeEquivalente}: ${calcFmtPct(equivalenteAnualPct)} a.a. (${calcFmtPct(equivalenteMensalPct)} a.m.)`;
   } else if (modo === 'ir') {
     texto = `Simulação de IR\n\nValor bruto: ${fmtBRL(r.valorBruto)}\nPrazo: ${prazoTexto}\nAlíquota de IR: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaPct)}\nIR: ${fmtBRL(r.ir)}\nValor líquido: ${fmtBRL(r.valorLiquido)}`;
   } else if (modo === 'comparar') {
@@ -910,7 +908,7 @@ function calcRenderResultado(modo, r) {
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.dias} dias (${r.du} du)</div></div>
       </div>${calcBotaoCopiarHtml()}`;
   } else if (modo === 'taxaEquivalente') {
-    // Comparador específico dos 2 produtos de debênture da GCB (sempre pré-fixada, ver
+    // Comparador dos 2 produtos de debênture da GCB, para qualquer indexador (ver
     // calc-campo-tipoDebenture): parte do produto informado (bruta ou Private/isenta) e mostra o
     // que o OUTRO precisaria pagar pra entregar o mesmo retorno líquido no mesmo prazo.
     const nomeInformado = r.isento ? 'Debênture Private (isenta)' : 'Debênture (bruta)';
@@ -927,6 +925,7 @@ function calcRenderResultado(modo, r) {
         <div style="font-size:20px; font-weight:800; color:#1f1f14;">${calcFmtPct(equivalenteAnualPct)} a.a. <span style="font-size:14px; color:#3d5a26; font-weight:600;">(${calcFmtPct(equivalenteMensalPct)} a.m.)</span></div>
       </div>
       <div class="calc-grid">
+        <div class="ci"><div class="lbl">Indexador Contratado</div><div class="val">${escapeHtmlCalc(calcUltimoContexto.taxaLabel)}</div></div>
         <div class="ci"><div class="lbl">Alíquota de IR (no prazo)</div><div class="val">${calcFmtPct(aliquotaMostrada)}</div></div>
         <div class="ci"><div class="lbl">CDI de Referência (no prazo)</div><div class="val">${calcFmtPct(r.cdiRefPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">Equivale a % do CDI</div><div class="val">${r.pctCdiEquivalente == null ? '—' : `≈${Math.round(r.pctCdiEquivalente)}%`}</div></div>

@@ -674,7 +674,7 @@ const CALC_MODOS = {
   vf: { showIndexador: true, showIsento: true, showVI: true, showVF: false, showValorBruto: false, showComparar: true, showTipoVF: false, vencimentoLabel: 'Vencimento' },
   vp: { showIndexador: true, showIsento: true, showVI: false, showVF: true, showValorBruto: false, showComparar: false, showTipoVF: true, vfLabel: 'Valor Futuro Desejado', vencimentoLabel: 'Vencimento' },
   rentabilidade: { showIndexador: false, showIsento: false, showVI: true, showVF: true, showValorBruto: false, showComparar: false, showTipoVF: false, vfLabel: 'Valor Futuro (conhecido)', vencimentoLabel: 'Data Final' },
-  taxaEquivalente: { showIndexador: true, showIsento: true, showVI: false, showVF: false, showValorBruto: false, showComparar: false, showTipoVF: false, vencimentoLabel: 'Vencimento' },
+  taxaEquivalente: { showIndexador: true, showIsento: false, showVI: false, showVF: false, showValorBruto: false, showComparar: false, showTipoVF: false, showTipoDebenture: true, vencimentoLabel: 'Vencimento' },
   ir: { showIndexador: false, showIsento: true, showVI: false, showVF: false, showValorBruto: true, showComparar: false, showTipoVF: false, vencimentoLabel: 'Data Final (resgate)' },
   rendaPassiva: { custom: true },
 };
@@ -712,6 +712,17 @@ function calcAtualizarCamposVisiveis() {
   }
   document.getElementById('calc-linha-indexador').style.display = cfg.showIndexador ? '' : 'none';
   document.getElementById('calc-campo-isento').style.display = cfg.showIsento ? '' : 'none';
+  // Taxa Equivalente é hoje um comparador específico dos 2 produtos de debênture da GCB (bruta vs.
+  // Private/isenta), sempre pré-fixada — troca o select genérico de Indexador + checkbox Isento
+  // pelos 2 botões com o nome real do produto, e força o indexador pra fixoAA por baixo dos panos.
+  document.getElementById('calc-campo-tipoDebenture').style.display = cfg.showTipoDebenture ? '' : 'none';
+  document.getElementById('calc-indexador-select-wrap').style.display = cfg.showTipoDebenture ? 'none' : '';
+  if (cfg.showTipoDebenture) {
+    document.getElementById('cf-tipo').value = 'fixoAA';
+    document.getElementById('calc-tipoDeb-bruta').classList.add('ativo');
+    document.getElementById('calc-tipoDeb-private').classList.remove('ativo');
+    document.getElementById('cf-isento').checked = false;
+  }
   document.getElementById('calc-campo-vi').style.display = cfg.showVI ? '' : 'none';
   document.getElementById('calc-linha-vf').style.display = cfg.showVF ? '' : 'none';
   document.getElementById('calc-campo-tipoVF').style.display = cfg.showTipoVF ? '' : 'none';
@@ -736,6 +747,17 @@ document.getElementById('calc-toggleComparar').addEventListener('click', () => {
   document.getElementById('calc-linha-produtoB').style.display = calcComparando ? '' : 'none';
   document.getElementById('calc-toggleComparar').textContent = calcComparando ? '✕ Cancelar comparação' : '⚖️ Comparar com outro produto';
   calcAtualizarCamposVisiveis();
+});
+
+document.getElementById('calc-tipoDeb-bruta').addEventListener('click', () => {
+  document.getElementById('calc-tipoDeb-bruta').classList.add('ativo');
+  document.getElementById('calc-tipoDeb-private').classList.remove('ativo');
+  document.getElementById('cf-isento').checked = false;
+});
+document.getElementById('calc-tipoDeb-private').addEventListener('click', () => {
+  document.getElementById('calc-tipoDeb-private').classList.add('ativo');
+  document.getElementById('calc-tipoDeb-bruta').classList.remove('ativo');
+  document.getElementById('cf-isento').checked = true;
 });
 
 document.querySelectorAll('.calc-modo-btn').forEach((btn) => {
@@ -824,8 +846,13 @@ function calcMontarResumoWhatsapp() {
   } else if (modo === 'rentabilidade') {
     texto = `Simulação\n\nValor investido: ${fmtBRL(ctx.valorInvestido)}\nValor futuro: ${fmtBRL(ctx.valorFuturo)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nRentabilidade: ${calcFmtPct(r.rentabilidadePct)} (${fmtBRL(r.rentabilidadeRS)})\nTaxa anualizada implícita (equivalente hoje): ${calcFmtPct(r.taxaAnualizadaPct)} a.a.`;
   } else if (modo === 'taxaEquivalente') {
-    const brutaLinha = r.isento ? `\nTaxa bruta equivalente (produto tributado): ${calcFmtPct(r.taxaBrutaEquivalentePct)} a.a.` : '';
-    texto = `Simulação\n\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nTaxa efetiva anual bruta (equivalente hoje): ${calcFmtPct(r.iAnualPct)} a.a.\nEquivalente mensal (bruto): ${calcFmtPct(r.taxaMensalPct)} a.m.\nAlíquota de IR aplicada: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaAplicadaPct)}\nTaxa anual líquida equivalente: ${calcFmtPct(r.iAnualLiquidoPct)} a.a.\nEquivalente mensal (líquido): ${calcFmtPct(r.taxaMensalLiquidaPct)} a.m.${brutaLinha}`;
+    const nomeInformado = r.isento ? 'Debênture Private (isenta)' : 'Debênture (bruta)';
+    const nomeEquivalente = r.isento ? 'Debênture (bruta)' : 'Debênture Private (isenta)';
+    const equivalenteAnualPct = r.isento ? r.taxaBrutaEquivalentePct : r.iAnualLiquidoPct;
+    const equivalenteMensalPct = r.isento
+      ? (Math.pow(1 + equivalenteAnualPct / 100, 1 / 12) - 1) * 100
+      : r.taxaMensalLiquidaPct;
+    texto = `Equivalência de Debêntures\n\n${nomeInformado}: ${calcFmtPct(r.iAnualPct)} a.a. (${calcFmtPct(r.taxaMensalPct)} a.m.)\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\n\nEquivale, líquido, em ${nomeEquivalente}: ${calcFmtPct(equivalenteAnualPct)} a.a. (${calcFmtPct(equivalenteMensalPct)} a.m.)`;
   } else if (modo === 'ir') {
     texto = `Simulação de IR\n\nValor bruto: ${fmtBRL(r.valorBruto)}\nPrazo: ${prazoTexto}\nAlíquota de IR: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaPct)}\nIR: ${fmtBRL(r.ir)}\nValor líquido: ${fmtBRL(r.valorLiquido)}`;
   } else if (modo === 'comparar') {
@@ -883,26 +910,31 @@ function calcRenderResultado(modo, r) {
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.dias} dias (${r.du} du)</div></div>
       </div>${calcBotaoCopiarHtml()}`;
   } else if (modo === 'taxaEquivalente') {
-    const brutaHtml = r.isento
-      ? `<div class="ci"><div class="lbl">Taxa Bruta Equivalente</div><div class="val">${calcFmtPct(r.taxaBrutaEquivalentePct)} a.a.</div></div>`
-      : '';
-    const notaHtml = r.isento
-      ? '<p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Taxa bruta equivalente: o que um produto TRIBUTADO precisaria pagar, antes do IR, para entregar o mesmo retorno líquido que este produto isento.</p>'
-      : '<p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Taxa líquida equivalente: a taxa (bruta) informada acima, já descontado o IR do prazo informado — o que efetivamente sobra, convertido de volta pra uma taxa anual/mensal comparável.</p>';
+    // Comparador específico dos 2 produtos de debênture da GCB (sempre pré-fixada, ver
+    // calc-campo-tipoDebenture): parte do produto informado (bruta ou Private/isenta) e mostra o
+    // que o OUTRO precisaria pagar pra entregar o mesmo retorno líquido no mesmo prazo.
+    const nomeInformado = r.isento ? 'Debênture Private (isenta)' : 'Debênture (bruta)';
+    const nomeEquivalente = r.isento ? 'Debênture (bruta)' : 'Debênture Private (isenta)';
+    const equivalenteAnualPct = r.isento ? r.taxaBrutaEquivalentePct : r.iAnualLiquidoPct;
+    const equivalenteMensalPct = r.isento
+      ? (Math.pow(1 + equivalenteAnualPct / 100, 1 / 12) - 1) * 100
+      : r.taxaMensalLiquidaPct;
+    const aliquotaMostrada = r.isento ? r.aliquotaComparacaoPct : r.aliquotaAplicadaPct;
     el.innerHTML = `
-      <div class="cr-principal"><span class="lbl">Taxa Efetiva Anual Bruta (equivalente hoje)</span>${calcFmtPct(r.iAnualPct)} a.a.</div>
+      <div class="cr-principal"><span class="lbl">${nomeInformado}</span>${calcFmtPct(r.iAnualPct)} a.a. <span style="font-size:14px; color:#5a5847; font-weight:600;">(${calcFmtPct(r.taxaMensalPct)} a.m.)</span></div>
+      <div style="background:#eaf3dd; border:1px solid #a3c96b; border-radius:10px; padding:12px 16px; margin:14px 0;">
+        <div style="font-size:10.5px; font-weight:800; color:#3d5a26; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:4px;">Equivale, líquido, em ${nomeEquivalente}</div>
+        <div style="font-size:20px; font-weight:800; color:#1f1f14;">${calcFmtPct(equivalenteAnualPct)} a.a. <span style="font-size:14px; color:#3d5a26; font-weight:600;">(${calcFmtPct(equivalenteMensalPct)} a.m.)</span></div>
+      </div>
       <div class="calc-grid">
-        <div class="ci"><div class="lbl">Indexador Contratado</div><div class="val">${escapeHtmlCalc(calcUltimoContexto.taxaLabel)}</div></div>
-        <div class="ci"><div class="lbl">Equivalente Mensal (bruto)</div><div class="val">${calcFmtPct(r.taxaMensalPct)} a.m.</div></div>
-        <div class="ci"><div class="lbl">Alíquota de IR Aplicada</div><div class="val">${r.isento ? 'Isento' : calcFmtPct(r.aliquotaAplicadaPct)}</div></div>
-        <div class="ci"><div class="lbl">Taxa Anual Líquida Equivalente</div><div class="val">${calcFmtPct(r.iAnualLiquidoPct)} a.a.</div></div>
-        <div class="ci"><div class="lbl">Equivalente Mensal (líquido)</div><div class="val">${calcFmtPct(r.taxaMensalLiquidaPct)} a.m.</div></div>
+        <div class="ci"><div class="lbl">Alíquota de IR (no prazo)</div><div class="val">${calcFmtPct(aliquotaMostrada)}</div></div>
         <div class="ci"><div class="lbl">CDI de Referência (no prazo)</div><div class="val">${calcFmtPct(r.cdiRefPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">Equivale a % do CDI</div><div class="val">${r.pctCdiEquivalente == null ? '—' : `≈${Math.round(r.pctCdiEquivalente)}%`}</div></div>
         <div class="ci"><div class="lbl">Vencimento</div><div class="val">${calcUltimoContexto.vencimentoTexto}</div></div>
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.du} dias úteis</div></div>
-        ${brutaHtml}
-      </div>${notaHtml}${calcBotaoCopiarHtml()}`;
+      </div>
+      <p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Equivalência calculada pra entregar o mesmo retorno líquido no mesmo prazo, considerando o IR já embutido em cada tipo de produto.</p>
+      ${calcBotaoCopiarHtml()}`;
   } else if (modo === 'ir') {
     el.innerHTML = `
       <div class="cr-principal"><span class="lbl">Valor Líquido</span>${fmtBRL(r.valorLiquido)}</div>

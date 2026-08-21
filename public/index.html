@@ -150,11 +150,6 @@
     padding:7px 14px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit;
   }
   .calc-modo-btn.ativo { background:#312F14; color:#fff; border-color:#312F14; }
-  .calc-tipodeb-btn {
-    background:#efece2; color:#1f1f14; border:1px solid #DCD8D5; border-radius:999px;
-    padding:7px 14px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit;
-  }
-  .calc-tipodeb-btn.ativo { background:#312F14; color:#fff; border-color:#312F14; }
   .calc-resultado { margin-top:18px; background:#f4f2ea; border:1px solid #e3e0d3; border-radius:10px; padding:16px 18px; display:none; }
   .calc-resultado.show { display:block; }
   .calc-resultado .cr-principal { font-family:'Leksikal Flare', 'Segoe UI', Arial, sans-serif; font-size:24px; font-weight:400; color:#1f1f14; margin-bottom:4px; }
@@ -466,10 +461,8 @@
 
     <form id="calculadoraForm">
       <div id="calc-campo-tipoDebenture" style="display:none; margin-bottom:14px;">
-        <label>Tipo de Produto</label>
-        <div class="calc-modos" style="margin:4px 0 0;">
-          <button type="button" class="calc-tipodeb-btn ativo" id="calc-tipoDeb-bruta" data-tipodeb="bruta">Debênture (bruta)</button>
-          <button type="button" class="calc-tipodeb-btn" id="calc-tipoDeb-private" data-tipodeb="private">Debênture Private (isenta)</button>
+        <div class="field-inline">
+          <input type="checkbox" id="cf-compararDebPrivate" checked> Comparar com Debênture Private
         </div>
       </div>
       <div class="grid3" id="calc-linha-indexador">

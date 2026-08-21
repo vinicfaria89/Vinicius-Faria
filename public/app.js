@@ -825,7 +825,7 @@ function calcMontarResumoWhatsapp() {
     texto = `Simulação\n\nValor investido: ${fmtBRL(ctx.valorInvestido)}\nValor futuro: ${fmtBRL(ctx.valorFuturo)}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nRentabilidade: ${calcFmtPct(r.rentabilidadePct)} (${fmtBRL(r.rentabilidadeRS)})\nTaxa anualizada implícita (equivalente hoje): ${calcFmtPct(r.taxaAnualizadaPct)} a.a.`;
   } else if (modo === 'taxaEquivalente') {
     const brutaLinha = r.isento ? `\nTaxa bruta equivalente (produto tributado): ${calcFmtPct(r.taxaBrutaEquivalentePct)} a.a.` : '';
-    texto = `Simulação\n\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nTaxa efetiva anual (equivalente hoje): ${calcFmtPct(r.iAnualPct)} a.a.\nEquivalente mensal: ${calcFmtPct(r.taxaMensalPct)} a.m.${brutaLinha}`;
+    texto = `Simulação\n\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nTaxa efetiva anual bruta (equivalente hoje): ${calcFmtPct(r.iAnualPct)} a.a.\nEquivalente mensal (bruto): ${calcFmtPct(r.taxaMensalPct)} a.m.\nAlíquota de IR aplicada: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaAplicadaPct)}\nTaxa anual líquida equivalente: ${calcFmtPct(r.iAnualLiquidoPct)} a.a.\nEquivalente mensal (líquido): ${calcFmtPct(r.taxaMensalLiquidaPct)} a.m.${brutaLinha}`;
   } else if (modo === 'ir') {
     texto = `Simulação de IR\n\nValor bruto: ${fmtBRL(r.valorBruto)}\nPrazo: ${prazoTexto}\nAlíquota de IR: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaPct)}\nIR: ${fmtBRL(r.ir)}\nValor líquido: ${fmtBRL(r.valorLiquido)}`;
   } else if (modo === 'comparar') {
@@ -886,17 +886,23 @@ function calcRenderResultado(modo, r) {
     const brutaHtml = r.isento
       ? `<div class="ci"><div class="lbl">Taxa Bruta Equivalente</div><div class="val">${calcFmtPct(r.taxaBrutaEquivalentePct)} a.a.</div></div>`
       : '';
+    const notaHtml = r.isento
+      ? '<p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Taxa bruta equivalente: o que um produto TRIBUTADO precisaria pagar, antes do IR, para entregar o mesmo retorno líquido que este produto isento.</p>'
+      : '<p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Taxa líquida equivalente: a taxa (bruta) informada acima, já descontado o IR do prazo informado — o que efetivamente sobra, convertido de volta pra uma taxa anual/mensal comparável.</p>';
     el.innerHTML = `
-      <div class="cr-principal"><span class="lbl">Taxa Efetiva Anual (equivalente hoje)</span>${calcFmtPct(r.iAnualPct)} a.a.</div>
+      <div class="cr-principal"><span class="lbl">Taxa Efetiva Anual Bruta (equivalente hoje)</span>${calcFmtPct(r.iAnualPct)} a.a.</div>
       <div class="calc-grid">
         <div class="ci"><div class="lbl">Indexador Contratado</div><div class="val">${escapeHtmlCalc(calcUltimoContexto.taxaLabel)}</div></div>
-        <div class="ci"><div class="lbl">Equivalente Mensal</div><div class="val">${calcFmtPct(r.taxaMensalPct)} a.m.</div></div>
+        <div class="ci"><div class="lbl">Equivalente Mensal (bruto)</div><div class="val">${calcFmtPct(r.taxaMensalPct)} a.m.</div></div>
+        <div class="ci"><div class="lbl">Alíquota de IR Aplicada</div><div class="val">${r.isento ? 'Isento' : calcFmtPct(r.aliquotaAplicadaPct)}</div></div>
+        <div class="ci"><div class="lbl">Taxa Anual Líquida Equivalente</div><div class="val">${calcFmtPct(r.iAnualLiquidoPct)} a.a.</div></div>
+        <div class="ci"><div class="lbl">Equivalente Mensal (líquido)</div><div class="val">${calcFmtPct(r.taxaMensalLiquidaPct)} a.m.</div></div>
         <div class="ci"><div class="lbl">CDI de Referência (no prazo)</div><div class="val">${calcFmtPct(r.cdiRefPct)} a.a.</div></div>
         <div class="ci"><div class="lbl">Equivale a % do CDI</div><div class="val">${r.pctCdiEquivalente == null ? '—' : `≈${Math.round(r.pctCdiEquivalente)}%`}</div></div>
         <div class="ci"><div class="lbl">Vencimento</div><div class="val">${calcUltimoContexto.vencimentoTexto}</div></div>
         <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.du} dias úteis</div></div>
         ${brutaHtml}
-      </div>${r.isento ? '<p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Taxa bruta equivalente: o que um produto TRIBUTADO precisaria pagar, antes do IR, para entregar o mesmo retorno líquido que este produto isento.</p>' : ''}${calcBotaoCopiarHtml()}`;
+      </div>${notaHtml}${calcBotaoCopiarHtml()}`;
   } else if (modo === 'ir') {
     el.innerHTML = `
       <div class="cr-principal"><span class="lbl">Valor Líquido</span>${fmtBRL(r.valorLiquido)}</div>

@@ -128,6 +128,25 @@ describe('calcularTaxaEquivalente — mesma taxa sob outras óticas', () => {
     const r = calcularTaxaEquivalente({ ativoTaxa, dataBase, vencimento, isento: false }, curvas);
     assert.equal(r.taxaBrutaEquivalentePct, undefined);
   });
+
+  test('não isento: taxa líquida equivalente bate com o VF líquido de calcularValorFuturo (VI=1)', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.20 };
+    const r = calcularTaxaEquivalente({ ativoTaxa, dataBase, vencimento, isento: false }, curvas);
+    const vf = calcularValorFuturo({ ativoTaxa, dataBase, vencimento, isento: false, valorInvestido: 1 }, curvas);
+    // Reconstrução independente: taxa anual líquida "desfaz" a capitalização até o vfLiquido (VI=1)
+    const iAnualLiquidoEsperado = Math.pow(vf.vfLiquido, 252 / r.du) - 1;
+    assertClose(r.iAnualLiquidoPct, iAnualLiquidoEsperado * 100, 'iAnualLiquidoPct bate com VF líquido desfeito');
+    assertClose(r.taxaMensalLiquidaPct, (Math.pow(1 + iAnualLiquidoEsperado, 1 / 12) - 1) * 100, 'mensal líquida = mensal equivalente do anual líquido');
+    assert.ok(r.taxaMensalLiquidaPct < r.taxaMensalPct, 'mensal líquida é sempre menor que a mensal bruta (produto tributado)');
+  });
+
+  test('isento: taxa líquida equivalente = taxa bruta (sem desconto)', () => {
+    const ativoTaxa = { tipo: 'fixoAA', taxaAA: 0.10 };
+    const r = calcularTaxaEquivalente({ ativoTaxa, dataBase, vencimento, isento: true }, curvas);
+    assertClose(r.iAnualLiquidoPct, r.iAnualPct, 'isento: líquido anual = bruto anual');
+    assertClose(r.taxaMensalLiquidaPct, r.taxaMensalPct, 'isento: líquido mensal = bruto mensal');
+    assertClose(r.aliquotaAplicadaPct, 0, 'isento: alíquota aplicada é 0');
+  });
 });
 
 describe('calcularIR — Bruto / IR / Líquido a partir de um rendimento já conhecido', () => {

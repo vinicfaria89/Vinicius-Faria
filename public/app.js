@@ -2,6 +2,52 @@ const ativosBody = document.getElementById('ativosBody');
 const linhaTpl = document.getElementById('linhaTpl');
 const totalInvestidoEl = document.getElementById('totalInvestido');
 
+// --- Campos de valor (R$): aceitar colar direto do extrato/saldo do cliente -----------------------
+// Esses campos são <input type="text"> (não type="number") justamente pra aceitar formatos que o
+// input nativo de número rejeitaria de cara, como "1.567,88" — colar do extrato do banco é o caso de
+// uso real que motivou isso, não digitação manual. Aceita qualquer formato comum e sempre devolve uma
+// string numérica limpa (ponto decimal, sem separador de milhar), pronta pra Number(...) direto —
+// nenhum código que já lê esses campos com Number(el.value) precisa mudar.
+function parseNumeroBR(strRaw) {
+  let s = String(strRaw == null ? '' : strRaw).trim();
+  if (!s) return '';
+  s = s.replace(/[^\d.,-]/g, '');
+  if (!s) return '';
+  const temVirgula = s.includes(',');
+  const temPonto = s.includes('.');
+  if (temVirgula && temPonto) {
+    // "1.567,88" — ponto é milhar, vírgula é decimal.
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (temVirgula) {
+    // "1567,88" — vírgula é decimal (padrão BR sem milhar).
+    s = s.replace(',', '.');
+  } else if (temPonto) {
+    // Só ponto: ambíguo entre decimal ("1567.88") e milhar BR sem decimal ("1.567"). Heurística: mais
+    // de um ponto, ou o último grupo com exatamente 3 dígitos e o primeiro com até 3 — é milhar.
+    const partes = s.split('.');
+    const ultimaEhGrupoDeMilhar = partes[partes.length - 1].length === 3;
+    if (partes.length > 2 || (ultimaEhGrupoDeMilhar && partes[0].length <= 3)) {
+      s = s.replace(/\./g, '');
+    }
+  }
+  return s;
+}
+
+function valorBrlNormalizar(el) {
+  const limpo = parseNumeroBR(el.value);
+  if (limpo !== el.value) el.value = limpo;
+}
+// blur não borbulha (bubble) — precisa de captura (terceiro argumento true) pra um listener único no
+// document pegar o evento de qualquer campo .valor-brl, incluindo os criados dinamicamente depois.
+document.addEventListener('blur', (e) => {
+  if (e.target && e.target.matches && e.target.matches('.valor-brl')) valorBrlNormalizar(e.target);
+}, true);
+document.addEventListener('paste', (e) => {
+  if (e.target && e.target.matches && e.target.matches('.valor-brl')) {
+    setTimeout(() => valorBrlNormalizar(e.target), 0);
+  }
+});
+
 // Estado "ativo" nos botões do header (Produtos/Calculadora/Novação) — reflete qual painel está
 // aberto no momento, já que os 3 podem ficar visualmente idênticos sem isso. Chamado depois de toda
 // ação que abre/fecha um dos 3 cards (ver toggleCatalogo/toggleCalculadora/toggleNovacao e os
@@ -1044,7 +1090,7 @@ function calcCriarCardRendaPassiva() {
     <div class="grid3" style="margin-top:10px;">
       <div><label>Data-base</label><input type="date" class="calc-rp-dataBase" value="${calcHojeISO()}"></div>
       <div><label>Vencimento</label><input type="date" class="calc-rp-vencimento"></div>
-      <div><label>Valor Investido</label><input type="number" step="0.01" min="0" class="calc-rp-valorInvestido" placeholder="50000"></div>
+      <div><label>Valor Investido</label><input type="text" inputmode="decimal" class="calc-rp-valorInvestido valor-brl" placeholder="50000"></div>
     </div>
     <div class="grid3" style="margin-top:10px;">
       <div><label>Periodicidade do Cupom</label><select class="calc-rp-periodicidade">
@@ -1882,7 +1928,7 @@ function nvCriarBlocoPosicao() {
       </div>
       <div>
         <label>Valor Investido (aporte inicial) <button type="button" class="nv-info-btn" aria-label="Mais informações">ⓘ</button></label>
-        <input type="number" step="0.01" min="0" class="nv-pos-valorInvestido" placeholder="10000">
+        <input type="text" inputmode="decimal" class="nv-pos-valorInvestido valor-brl" placeholder="10000">
         <div class="nv-info-texto">Base do Imposto de Renda: o ganho tributável é o valor final menos este aporte original. Não muda mesmo se a debênture já foi novada antes.</div>
       </div>
     </div>
@@ -1921,7 +1967,7 @@ function nvCriarBlocoPosicao() {
       </div>
       <div>
         <label>Valor Atual da Posição <button type="button" class="nv-info-btn" aria-label="Mais informações">ⓘ</button></label>
-        <input type="number" step="0.01" min="0" class="nv-pos-valorAtual" placeholder="12500">
+        <input type="text" inputmode="decimal" class="nv-pos-valorAtual valor-brl" placeholder="12500">
         <div class="nv-info-texto">O valor real, de hoje (do extrato ou do app do cliente) — usado em todos os cálculos a partir daqui, sem recalcular.</div>
       </div>
     </div>
@@ -2092,17 +2138,17 @@ document.getElementById('nv-confirmarImportar').addEventListener('click', () => 
   linhas.forEach((linha, i) => {
     const campos = linha.split('\t').length > 1 ? linha.split('\t') : linha.split(';');
     const [nome, valorAtual, vencimentoAtual, valorInvestido, dataAplicacao] = campos.map((c) => (c || '').trim());
-    if (!nome || !(Number(valorAtual.replace(',', '.')) > 0) || !nvParseDataImportada(vencimentoAtual)) {
+    if (!nome || !(Number(parseNumeroBR(valorAtual)) > 0) || !nvParseDataImportada(vencimentoAtual)) {
       falhas.push(i + 1);
       return;
     }
     const div = nvCriarBlocoPosicao();
     div.querySelector('.nv-pos-nome').value = nome;
-    div.querySelector('.nv-pos-valorAtual').value = Number(valorAtual.replace(',', '.'));
+    div.querySelector('.nv-pos-valorAtual').value = parseNumeroBR(valorAtual);
     div.querySelector('.nv-pos-vencimentoAtual').value = nvParseDataImportada(vencimentoAtual);
     nvAtualizarPrazoRestante(div.querySelector('.nv-pos-vencimentoAtual'));
-    if (valorInvestido && Number(valorInvestido.replace(',', '.')) > 0) {
-      div.querySelector('.nv-pos-valorInvestido').value = Number(valorInvestido.replace(',', '.'));
+    if (valorInvestido && Number(parseNumeroBR(valorInvestido)) > 0) {
+      div.querySelector('.nv-pos-valorInvestido').value = parseNumeroBR(valorInvestido);
     }
     if (dataAplicacao && nvParseDataImportada(dataAplicacao)) {
       // A coluna opcional de data representa a Aplicação Original (etapa 1) — o formato colado não

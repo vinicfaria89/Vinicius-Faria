@@ -354,7 +354,7 @@
         </div>
         <div>
           <label>Valor Mínimo (opcional)</label>
-          <input type="number" step="0.01" min="0" id="cp-valorMinimo" placeholder="ex.: 50000">
+          <input type="text" inputmode="decimal" class="valor-brl" id="cp-valorMinimo" placeholder="ex.: 50000">
         </div>
         <div>
           <label>Vencimento (opcional)</label>
@@ -514,13 +514,13 @@
         </div>
         <div id="calc-campo-vi">
           <label id="calc-label-vi">Valor Investido</label>
-          <input type="number" step="0.01" min="0" id="cf-valorInvestido" placeholder="100000">
+          <input type="text" inputmode="decimal" class="valor-brl" id="cf-valorInvestido" placeholder="100000">
         </div>
       </div>
       <div style="margin-top:14px; max-width:calc(33.33% - 10px);" id="calc-linha-vf">
         <div id="calc-campo-vf">
           <label id="calc-label-vf">Valor Futuro Desejado</label>
-          <input type="number" step="0.01" min="0" id="cf-valorFuturo" placeholder="150000">
+          <input type="text" inputmode="decimal" class="valor-brl" id="cf-valorFuturo" placeholder="150000">
         </div>
         <div class="field-inline" id="calc-campo-tipoVF" style="margin-top:8px; display:none; gap:14px;">
           <label style="font-weight:400; display:flex; align-items:center; gap:4px;"><input type="radio" name="cf-tipoValorFuturo" value="bruto" checked> Valor bruto</label>
@@ -530,7 +530,7 @@
       <div style="margin-top:14px; max-width:calc(33.33% - 10px); display:none;" id="calc-linha-valorBruto">
         <div>
           <label>Valor do Rendimento Bruto</label>
-          <input type="number" step="0.01" min="0" id="cf-valorBruto" placeholder="165000">
+          <input type="text" inputmode="decimal" class="valor-brl" id="cf-valorBruto" placeholder="165000">
         </div>
       </div>
       <div class="row-actions">
@@ -620,7 +620,7 @@
         </div>
         <div>
           <label>Valor Investido (aporte inicial) <button type="button" class="nv-info-btn" aria-label="Mais informações">ⓘ</button></label>
-          <input type="number" step="0.01" min="0" id="nv-valorInvestido" placeholder="10000">
+          <input type="text" inputmode="decimal" class="valor-brl" id="nv-valorInvestido" placeholder="10000">
           <div class="nv-info-texto">Base do Imposto de Renda: o ganho tributável é o valor final menos este aporte original. Não muda mesmo se a debênture já foi novada antes.</div>
         </div>
       </div>
@@ -659,7 +659,7 @@
         </div>
         <div>
           <label>Valor Atual da Posição <button type="button" class="nv-info-btn" aria-label="Mais informações">ⓘ</button></label>
-          <input type="number" step="0.01" min="0" id="nv-valorAtualPosicao" placeholder="12500">
+          <input type="text" inputmode="decimal" class="valor-brl" id="nv-valorAtualPosicao" placeholder="12500">
           <div class="nv-info-texto">O valor real, de hoje (do extrato ou do app do cliente) — usado em todos os cálculos a partir daqui, sem recalcular.</div>
         </div>
       </div>
@@ -1023,7 +1023,7 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
       </select>
     </td>
     <td><input type="number" step="0.01" min="0" class="f-taxa" placeholder="1,60"></td>
-    <td><input type="number" step="0.01" min="0" class="f-vi" placeholder="150000"></td>
+    <td><input type="text" inputmode="decimal" class="f-vi valor-brl" placeholder="150000"></td>
     <td><input type="date" class="f-vencimento"></td>
     <td style="text-align:center"><input type="checkbox" class="f-isento"></td>
     <td>

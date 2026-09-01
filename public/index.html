@@ -93,6 +93,7 @@
   .field-inline { display:flex; align-items:center; gap:5px; font-size:10.5px; white-space:nowrap; }
   .linha-cronograma-travada { background:#f3f6ee; }
   .linha-cronograma-travada input:disabled, .linha-cronograma-travada select:disabled { opacity:0.75; cursor:not-allowed; }
+  .f-cronograma-aviso { margin-top:4px; font-size:10px; color:#4a6b2f; font-weight:600; }
   .nov-posicao-card { background:#faf9f4; border:1px solid #e2ded0; border-radius:10px; padding:14px 16px; margin-top:10px; }
   .nov-posicao-card + .nov-posicao-card { margin-top:12px; }
   .nov-posicao-card .cabecalho { display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -1018,6 +1019,7 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
     <td>
       <input type="text" class="f-nome" list="" placeholder="ex.: Debênture 3 Anos" autocomplete="off">
       <datalist class="f-produtos-datalist"></datalist>
+      <div class="f-cronograma-aviso" style="display:none;">🔒 Fluxo próprio cadastrado — dados fixos</div>
     </td>
     <td>
       <select class="f-tipo">

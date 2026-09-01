@@ -359,7 +359,7 @@ function aplicarValorMinimo(tr, valorMinimo) {
 // edite acidentalmente e gere uma simulação inconsistente com o material real do ativo. O valor
 // investido continua editável, é a única variável de fato por cliente.
 function aplicarBloqueioCronograma(tr, bloqueado) {
-  const campos = ['.f-tipo', '.f-taxa', '.f-vencimento', '.f-isento', '.f-fluxoPagamento', '.f-cashSweep', '.f-periodicidade', '.f-periodicidadeJurosCS', '.f-periodicidadeAmortCS'];
+  const campos = ['.f-tipoProdutoLabel', '.f-tipo', '.f-taxa', '.f-vencimento', '.f-fluxoPagamento', '.f-cashSweep', '.f-periodicidade', '.f-periodicidadeJurosCS', '.f-periodicidadeAmortCS'];
   campos.forEach((sel) => {
     const el = tr.querySelector(sel);
     if (el) el.disabled = bloqueado;
@@ -367,6 +367,24 @@ function aplicarBloqueioCronograma(tr, bloqueado) {
   tr.classList.toggle('linha-cronograma-travada', bloqueado);
   const taxaEl = tr.querySelector('.f-taxa');
   if (taxaEl) taxaEl.title = bloqueado ? 'Cronograma personalizado: taxa e datas fixas do material de distribuição, não editáveis.' : '';
+  const aviso = tr.querySelector('.f-cronograma-aviso');
+  if (aviso) aviso.style.display = bloqueado ? '' : 'none';
+  // O nome não é "disabled" (input desabilitado não dispara o evento `change`, então o usuário
+  // nunca conseguiria trocar de produto de volta) — em vez disso, fica readonly: não dá pra digitar,
+  // mas o campo continua clicável/focável, então o listener de `change` no <input> segue funcionando
+  // se o assessor selecionar outro nome da lista.
+  const nomeEl = tr.querySelector('.f-nome');
+  if (nomeEl) nomeEl.readOnly = bloqueado;
+  // Isenção e Cash Sweep têm regras PRÓPRIAS de disabled (categoria sempre isenta, Cash Sweep
+  // substituindo o fluxo de pagamento) — travadas aqui, o cronograma manda; destravadas, devolve
+  // o controle pra essas regras em vez de simplesmente reabilitar tudo.
+  if (bloqueado) {
+    const isentoEl = tr.querySelector('.f-isento');
+    if (isentoEl) isentoEl.disabled = true;
+  } else {
+    atualizarIsentoAutomatico(tr);
+    atualizarModoCashSweep(tr);
+  }
 }
 
 // Aplica um produto cadastrado a uma linha já existente da tabela (usado quando o usuário digita/escolhe

@@ -115,6 +115,9 @@ app.post('/api/gerar', async (req, res) => {
 
     const dataBaseObj = parseDataLocal(dataBase);
 
+    const PERIODICIDADES_VALIDAS = ['mensal', 'semestral', 'anual'];
+    const normalizarPeriodicidade = (v) => (PERIODICIDADES_VALIDAS.includes(v) ? v : 'mensal');
+
     const ativosInput = ativos.map((a) => {
       const base = {
         nome: a.nome,
@@ -127,9 +130,18 @@ app.post('/api/gerar', async (req, res) => {
         reinvestir: !!a.reinvestir,
         cashSweep: !!a.cashSweep,
         periodicidadeCupom: a.periodicidadeCupom === 'semestral' ? 'semestral' : 'mensal',
-        periodicidadeJurosCashSweep: a.periodicidadeJurosCashSweep === 'semestral' ? 'semestral' : 'mensal',
-        periodicidadeAmortizacaoCashSweep: a.periodicidadeAmortizacaoCashSweep === 'semestral' ? 'semestral' : 'mensal',
+        periodicidadeJurosCashSweep: normalizarPeriodicidade(a.periodicidadeJurosCashSweep),
+        periodicidadeAmortizacaoCashSweep: normalizarPeriodicidade(a.periodicidadeAmortizacaoCashSweep),
       };
+      // Cronograma personalizado (datas e % de amortização reais do material de distribuição) — ver
+      // lib/calculo.js: calcularCronogramaPersonalizado. Tem prioridade sobre cashSweep quando presente.
+      if (a.cronogramaPersonalizado && Array.isArray(a.cronograma) && a.cronograma.length) {
+        base.cronogramaPersonalizado = true;
+        base.cronograma = a.cronograma.map((p) => ({
+          data: parseDataLocal(p.data),
+          pctAmortizar: Number(p.pctAmortizar),
+        }));
+      }
       if (a.tipo === 'fixo') base.taxaAM = Number(a.taxaAM) / 100;
       else if (a.tipo === 'fixoAA') base.taxaAA = Number(a.taxaAA) / 100;
       else if (a.tipo === 'pctcdi') base.percentualCDI = Number(a.percentualCDI) / 100;

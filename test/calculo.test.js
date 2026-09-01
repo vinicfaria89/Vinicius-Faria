@@ -11,6 +11,7 @@ const {
   calcularDurationAtivo,
   calcularCarteira,
 } = require('../lib/calculo');
+const { diasUteisEntre } = require('../lib/calendario');
 
 const EPS = 1e-6;
 function assertClose(actual, expected, msg) {
@@ -329,6 +330,54 @@ describe('calcularDurationAtivo — duration de Macaulay pondera pelos fluxos de
     const d = calcularDurationAtivo(ativo, c);
     assert.ok(d < c.dias / 365, 'amortização SAC antecipa devolução de principal -> duration menor');
     assert.ok(d > 0, 'duration positiva');
+  });
+});
+
+describe('cronograma personalizado — reproduz fielmente um fluxo irregular real (ex.: CRA)', () => {
+  const dataBase = new Date(2026, 0, 1);
+
+  test('2 parcelas: VF líquido bate com cálculo independente via dias úteis reais', () => {
+    const iAnual = 0.15;
+    const p1 = new Date(2027, 5, 30);
+    const p2 = new Date(2027, 11, 30);
+    const ativo = {
+      nome: 'x', tipo: 'fixoAA', taxaAA: iAnual, vi: 10000, dataBase, vencimento: p2,
+      isento: false, cronogramaPersonalizado: true,
+      cronograma: [
+        { data: p1, pctAmortizar: 40 },
+        { data: p2, pctAmortizar: 100 },
+      ],
+    };
+    const c = calcularAtivo(ativo, {});
+
+    const du1 = diasUteisEntre(dataBase, p1);
+    const jurosBruto1 = 10000 * (Math.pow(1 + iAnual, du1 / 252) - 1);
+    const diasAte1 = diasEntre(dataBase, p1);
+    const jurosLiq1 = jurosBruto1 * (1 - aliquotaIR(diasAte1));
+    const saldoApos1 = 10000 - 10000 * 0.4;
+
+    const du2 = diasUteisEntre(p1, p2);
+    const jurosBruto2 = saldoApos1 * (Math.pow(1 + iAnual, du2 / 252) - 1);
+    const diasAte2 = diasEntre(dataBase, p2);
+    const jurosLiq2 = jurosBruto2 * (1 - aliquotaIR(diasAte2));
+
+    assertClose(c.vfLiquido, 10000 + jurosLiq1 + jurosLiq2, 'VF líquido bate com soma independente dos juros líquidos de cada parcela');
+    assert.equal(c.nPeriodos, 2, 'duas parcelas de juros no fluxo');
+  });
+
+  test('parcelas com data anterior à data-base são ignoradas (fluxo já vencido não entra na simulação)', () => {
+    const passada = new Date(dataBase.getFullYear() - 1, 0, 15);
+    const futura = new Date(dataBase.getFullYear() + 1, 0, 15);
+    const ativo = {
+      nome: 'x', tipo: 'fixoAA', taxaAA: 0.15, vi: 10000, dataBase, vencimento: futura,
+      isento: true, cronogramaPersonalizado: true,
+      cronograma: [
+        { data: passada, pctAmortizar: 50 },
+        { data: futura, pctAmortizar: 100 },
+      ],
+    };
+    const c = calcularAtivo(ativo, {});
+    assert.equal(c.nPeriodos, 1, 'só a parcela futura entra no fluxo; a passada é descartada');
   });
 });
 

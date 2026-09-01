@@ -352,6 +352,23 @@ function aplicarValorMinimo(tr, valorMinimo) {
   }
 }
 
+// Produtos com cronograma personalizado (fluxo de caixa real do material de distribuição, ver
+// lib/calculo.js: calcularCronogramaPersonalizado) têm datas e percentuais de amortização fixos e
+// já embutidos no cadastro — travamos os campos que definiriam um fluxo diferente (taxa, tipo,
+// vencimento, isenção, fluxo de pagamento, Cash Sweep e periodicidades) pra impedir que o assessor
+// edite acidentalmente e gere uma simulação inconsistente com o material real do ativo. O valor
+// investido continua editável, é a única variável de fato por cliente.
+function aplicarBloqueioCronograma(tr, bloqueado) {
+  const campos = ['.f-tipo', '.f-taxa', '.f-vencimento', '.f-isento', '.f-fluxoPagamento', '.f-cashSweep', '.f-periodicidade', '.f-periodicidadeJurosCS', '.f-periodicidadeAmortCS'];
+  campos.forEach((sel) => {
+    const el = tr.querySelector(sel);
+    if (el) el.disabled = bloqueado;
+  });
+  tr.classList.toggle('linha-cronograma-travada', bloqueado);
+  const taxaEl = tr.querySelector('.f-taxa');
+  if (taxaEl) taxaEl.title = bloqueado ? 'Cronograma personalizado: taxa e datas fixas do material de distribuição, não editáveis.' : '';
+}
+
 // Aplica um produto cadastrado a uma linha já existente da tabela (usado quando o usuário digita/escolhe
 // um nome que bate com o catálogo) — mesmos campos que addLinha(prefill) preenche na criação da linha.
 function preencherLinhaComProduto(tr, p) {
@@ -369,6 +386,14 @@ function preencherLinhaComProduto(tr, p) {
   atualizarIsentoAutomatico(tr);
   atualizarModoCashSweep(tr);
   atualizarDatalistProdutos(tr);
+  if (p.cronogramaPersonalizado && Array.isArray(p.cronograma) && p.cronograma.length) {
+    tr.dataset.cronogramaPersonalizado = '1';
+    tr.dataset.cronograma = JSON.stringify(p.cronograma);
+  } else {
+    delete tr.dataset.cronogramaPersonalizado;
+    delete tr.dataset.cronograma;
+  }
+  aplicarBloqueioCronograma(tr, !!p.cronogramaPersonalizado);
 }
 
 function buscarProdutoCadastradoPorNome(nome) {
@@ -451,7 +476,12 @@ function addLinha(prefill) {
   nomeInput.addEventListener('change', () => {
     const produto = buscarProdutoCadastradoPorNome(nomeInput.value);
     if (produto) preencherLinhaComProduto(tr, produto);
-    else aplicarValorMinimo(tr, null);
+    else {
+      aplicarValorMinimo(tr, null);
+      delete tr.dataset.cronogramaPersonalizado;
+      delete tr.dataset.cronograma;
+      aplicarBloqueioCronograma(tr, false);
+    }
   });
   tr.querySelector('.f-tipoProdutoLabel').addEventListener('change', () => {
     atualizarIsentoAutomatico(tr);
@@ -672,6 +702,10 @@ document.getElementById('gerarBtn').addEventListener('click', async () => {
     else if (tipo === 'fixoAA') ativo.taxaAA = taxa;
     else if (tipo === 'pctcdi') ativo.percentualCDI = taxa;
     else ativo.spread = taxa; // cdi / ipca
+    if (tr.dataset.cronogramaPersonalizado && tr.dataset.cronograma) {
+      ativo.cronogramaPersonalizado = true;
+      ativo.cronograma = JSON.parse(tr.dataset.cronograma);
+    }
     return ativo;
   });
 

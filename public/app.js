@@ -527,6 +527,15 @@ function addLinha(prefill) {
   atualizarIsentoAutomatico(tr);
   atualizarModoCashSweep(tr);
   atualizarDatalistProdutos(tr);
+  // Mesma trava de preencherLinhaComProduto, aplicada aqui também: addLinha(prefill) é o segundo
+  // caminho de criar uma linha já preenchida (o botão "Usar" do catálogo, ver o handler de
+  // catalogoLista), separado de digitar o nome na própria tabela — sem isso, um ativo com fluxo
+  // próprio adicionado por ali ficava com os campos editáveis.
+  if (prefill && prefill.cronogramaPersonalizado && Array.isArray(prefill.cronograma) && prefill.cronograma.length) {
+    tr.dataset.cronogramaPersonalizado = '1';
+    tr.dataset.cronograma = JSON.stringify(prefill.cronograma);
+  }
+  aplicarBloqueioCronograma(tr, !!(prefill && prefill.cronogramaPersonalizado));
   atualizarTotal();
 }
 
@@ -2673,6 +2682,8 @@ document.getElementById('catalogoLista').addEventListener('click', async (e) => 
       periodicidadeCupom: produto.periodicidadeCupom,
       periodicidadeJurosCashSweep: produto.periodicidadeJurosCashSweep,
       periodicidadeAmortizacaoCashSweep: produto.periodicidadeAmortizacaoCashSweep,
+      cronogramaPersonalizado: produto.cronogramaPersonalizado,
+      cronograma: produto.cronograma,
     });
   } else if (e.target.classList.contains('cp-editar')) {
     document.getElementById('cp-id').value = produto.id;

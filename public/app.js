@@ -490,8 +490,13 @@ function addLinha(prefill) {
     }
   });
   // Se o nome digitado/escolhido bate com um produto cadastrado no catálogo, preenche o resto da
-  // linha sozinho — é o principal ganho de ter cadastrado o produto antes.
-  nomeInput.addEventListener('change', () => {
+  // linha sozinho — é o principal ganho de ter cadastrado o produto antes. Escuta tanto `input`
+  // quanto `change`: escolher uma sugestão do <datalist> nativo dispara `input` de forma confiável
+  // em todo navegador, mas NEM sempre dispara `change` até o campo perder o foco (varia por
+  // navegador/SO) — sem o `input`, dava pra escolher um produto com fluxo próprio e a trava só
+  // aparecer depois de clicar fora do campo, ou nem aparecer, dependendo de como o texto foi
+  // preenchido. Rodar em ambos é seguro: a função é idempotente (mesmo nome → mesmo resultado).
+  const handleNomeInput = () => {
     const produto = buscarProdutoCadastradoPorNome(nomeInput.value);
     if (produto) preencherLinhaComProduto(tr, produto);
     else {
@@ -500,7 +505,9 @@ function addLinha(prefill) {
       delete tr.dataset.cronograma;
       aplicarBloqueioCronograma(tr, false);
     }
-  });
+  };
+  nomeInput.addEventListener('input', handleNomeInput);
+  nomeInput.addEventListener('change', handleNomeInput);
   tr.querySelector('.f-tipoProdutoLabel').addEventListener('change', () => {
     atualizarIsentoAutomatico(tr);
     atualizarDatalistProdutos(tr);

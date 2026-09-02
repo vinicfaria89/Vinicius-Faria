@@ -61,7 +61,18 @@ if (BASIC_AUTH_USER && BASIC_AUTH_PASS) {
 }
 
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+// Sem Cache-Control explícito, o navegador pode servir app.js/index.html do cache local sem sequer
+// checar com o servidor se mudou (cache "heurística" baseada só em Last-Modified) — foi exatamente
+// isso que fez uma trava de edição recém-publicada não aparecer numa aba já aberta, mesmo depois de
+// um F5 normal. no-cache força revalidação (ETag/Last-Modified) a cada carregamento: o navegador
+// sempre pergunta ao servidor "isso mudou?" antes de reusar o cache, então um F5 comum já basta.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html') || filePath.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 
 // Traduz erros técnicos das fontes externas (ANBIMA/B3/BACEN — todas prefixam a mensagem com o
 // próprio nome, ver lib/anbima.js, lib/b3.js, lib/bacen.js) numa mensagem clara pro usuário final,

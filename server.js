@@ -118,7 +118,41 @@ app.post('/api/gerar', async (req, res) => {
     const PERIODICIDADES_VALIDAS = ['mensal', 'semestral', 'anual'];
     const normalizarPeriodicidade = (v) => (PERIODICIDADES_VALIDAS.includes(v) ? v : 'mensal');
 
-    const ativosInput = ativos.map((a) => {
+    // Ativos com fluxo próprio cadastrado no catálogo (cronogramaPersonalizado) têm o catálogo como
+    // FONTE DA VERDADE, não o que o cliente mandou — a trava do formulário (ver public/app.js) já
+    // impede a edição na UI, mas só isso não é suficiente: uma aba com JS antigo em cache, uma
+    // chamada direta a este endpoint, ou qualquer outro jeito de contornar a UI ainda poderia mandar
+    // taxa/vencimento/fluxo divergentes do material real do ativo. Aqui, se o nome bate com um
+    // produto assim, TODOS os campos que definem o fluxo são substituídos pelos do cadastro — só o
+    // valor investido continua vindo do cliente.
+    const catalogoAtual = produtosCatalogo.listarProdutos();
+    const normalizarNome = (s) => (s || '').trim().toLowerCase();
+    const ativosSaneados = ativos.map((a) => {
+      const produto = catalogoAtual.find((p) => p.cronogramaPersonalizado && normalizarNome(p.nome) === normalizarNome(a.nome));
+      if (!produto) return a;
+      return {
+        nome: produto.nome,
+        tipoProdutoLabel: produto.categoria,
+        tipo: produto.tipo,
+        taxaAM: produto.taxa,
+        taxaAA: produto.taxa,
+        percentualCDI: produto.taxa,
+        spread: produto.taxa,
+        vi: a.vi,
+        vencimento: produto.vencimento,
+        isento: produto.isento,
+        pagaCupomMensal: produto.fluxoPagamento === 'distribuido' || produto.fluxoPagamento === 'reinvestido',
+        reinvestir: produto.fluxoPagamento === 'reinvestido',
+        cashSweep: !!produto.cashSweep,
+        periodicidadeCupom: produto.periodicidadeCupom,
+        periodicidadeJurosCashSweep: produto.periodicidadeJurosCashSweep,
+        periodicidadeAmortizacaoCashSweep: produto.periodicidadeAmortizacaoCashSweep,
+        cronogramaPersonalizado: true,
+        cronograma: produto.cronograma,
+      };
+    });
+
+    const ativosInput = ativosSaneados.map((a) => {
       const base = {
         nome: a.nome,
         tipoProdutoLabel: a.tipoProdutoLabel,

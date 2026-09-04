@@ -128,6 +128,10 @@ app.post('/api/gerar', async (req, res) => {
 
     const PERIODICIDADES_VALIDAS = ['mensal', 'semestral', 'anual'];
     const normalizarPeriodicidade = (v) => (PERIODICIDADES_VALIDAS.includes(v) ? v : 'mensal');
+    // 'vencimento' só faz sentido pra AMORTIZAÇÃO do Cash Sweep (uma parcela única do principal
+    // inteiro na última data, sem amortização programada antes — ver calcularAmortizacaoCashSweep
+    // em lib/calculo.js); não é uma periodicidade válida pra juros.
+    const normalizarPeriodicidadeAmortizacao = (v) => (v === 'vencimento' || PERIODICIDADES_VALIDAS.includes(v) ? v : 'mensal');
 
     // Ativos com fluxo próprio cadastrado no catálogo (cronogramaPersonalizado) têm o catálogo como
     // FONTE DA VERDADE, não o que o cliente mandou — a trava do formulário (ver public/app.js) já
@@ -176,7 +180,7 @@ app.post('/api/gerar', async (req, res) => {
         cashSweep: !!a.cashSweep,
         periodicidadeCupom: a.periodicidadeCupom === 'semestral' ? 'semestral' : 'mensal',
         periodicidadeJurosCashSweep: normalizarPeriodicidade(a.periodicidadeJurosCashSweep),
-        periodicidadeAmortizacaoCashSweep: normalizarPeriodicidade(a.periodicidadeAmortizacaoCashSweep),
+        periodicidadeAmortizacaoCashSweep: normalizarPeriodicidadeAmortizacao(a.periodicidadeAmortizacaoCashSweep),
       };
       // Cronograma personalizado (datas e % de amortização reais do material de distribuição) — ver
       // lib/calculo.js: calcularCronogramaPersonalizado. Tem prioridade sobre cashSweep quando presente.

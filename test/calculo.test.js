@@ -245,6 +245,30 @@ describe('calcularAtivo — Cash Sweep (amortização SAC + juros sobre saldo de
     // A partir do mês 7 (após a 1ª amortização semestral), o saldo caiu para 600 -> juros menores.
     assert.ok(c.cupomLiquidos[6] < c.cupomLiquidos[5], 'juros caem após a amortização semestral reduzir o saldo');
   });
+
+  test('amortização "no vencimento": juros mensais sobre o saldo cheio o prazo todo, principal devolvido inteiro só na última parcela', () => {
+    const ativo = {
+      nome: 'CRI Cash Sweep sem amortização antecipada',
+      tipo: 'fixoAA',
+      taxaAA: Math.pow(1.01, 12) - 1,
+      vi: 1200,
+      dataBase: new Date(2026, 0, 1),
+      vencimento: new Date(2027, 0, 1),
+      isento: true,
+      cashSweep: true,
+      periodicidadeJurosCashSweep: 'mensal',
+      periodicidadeAmortizacaoCashSweep: 'vencimento',
+    };
+    const c = calcularAtivo(ativo, {});
+    assert.equal(c.cashSweep.nAmortizacoes, 1, 'uma única amortização (o principal inteiro) em todo o prazo');
+    assertClose(c.cashSweep.amortizacaoConstante, 1200, 'parcela única = VI inteiro');
+    assert.equal(c.nPeriodos, 12, '12 pagamentos de juros (mensal), sem nenhuma amortização antes do fim');
+    // Sem amortização antecipada, o saldo fica constante = VI o prazo todo -> todos os juros mensais são iguais.
+    assertClose(c.cupomLiquidos[0], c.cupomLiquidos[11], 'juros iguais em todos os meses (saldo nunca cai antes do vencimento)');
+    assertClose(c.cupomLiquidos[0], 1200 * 0.01, 'cada juro mensal = 1% sobre o saldo cheio');
+    const somaJuros = c.cupomLiquidos.reduce((s, v) => s + v, 0);
+    assertClose(c.vfLiquido, 1200 + somaJuros, 'VF líquido = principal (devolvido no vencimento) + soma dos juros mensais');
+  });
 });
 
 describe('calcularAtivo — Caso C: juros reinvestidos periodicamente (pagaCupomMensal=true, reinvestir=true)', () => {

@@ -145,14 +145,22 @@ app.post('/api/gerar', async (req, res) => {
     const ativosSaneados = ativos.map((a) => {
       const produto = catalogoAtual.find((p) => p.cronogramaPersonalizado && normalizarNome(p.nome) === normalizarNome(a.nome));
       if (!produto) return a;
+      // taxaEditavel: exceção pontual (ex.: CRA Munaretto) — o CRONOGRAMA (datas e % de amortização
+      // por parcela) é uma característica do crédito subjacente, travada igual aos demais; mas a
+      // TAXA oferecida pode variar por série/negociação, então aqui (e só aqui) o valor do cliente é
+      // aceito em vez de ser sobrescrito pelo cadastro.
+      const taxaCliente = a.taxaAM ?? a.taxaAA ?? a.percentualCDI ?? a.spread;
+      const taxaFinal = produto.taxaEditavel && taxaCliente != null && taxaCliente !== '' && Number(taxaCliente) > 0
+        ? Number(taxaCliente)
+        : produto.taxa;
       return {
         nome: produto.nome,
         tipoProdutoLabel: produto.categoria,
         tipo: produto.tipo,
-        taxaAM: produto.taxa,
-        taxaAA: produto.taxa,
-        percentualCDI: produto.taxa,
-        spread: produto.taxa,
+        taxaAM: taxaFinal,
+        taxaAA: taxaFinal,
+        percentualCDI: taxaFinal,
+        spread: taxaFinal,
         vi: a.vi,
         vencimento: produto.vencimento,
         isento: produto.isento,

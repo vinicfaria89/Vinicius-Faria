@@ -358,17 +358,29 @@ function aplicarValorMinimo(tr, valorMinimo) {
 // vencimento, isenção, fluxo de pagamento, Cash Sweep e periodicidades) pra impedir que o assessor
 // edite acidentalmente e gere uma simulação inconsistente com o material real do ativo. O valor
 // investido continua editável, é a única variável de fato por cliente.
-function aplicarBloqueioCronograma(tr, bloqueado) {
-  const campos = ['.f-tipoProdutoLabel', '.f-tipo', '.f-taxa', '.f-vencimento', '.f-fluxoPagamento', '.f-cashSweep', '.f-periodicidade', '.f-periodicidadeJurosCS', '.f-periodicidadeAmortCS'];
+// `taxaEditavel` é uma exceção pontual: alguns ativos (ex.: CRA Munaretto) têm o CRONOGRAMA de
+// amortização travado (é uma característica do crédito subjacente, independe de quem investe),
+// mas a TAXA oferecida a um investidor específico pode variar por série/negociação — nesses casos
+// o produto cadastrado marca taxaEditavel=true e a taxa fica de fora da trava. O restante do fluxo
+// (datas e % de amortização por parcela) continua fixo, porque isso não muda com a taxa.
+function aplicarBloqueioCronograma(tr, bloqueado, taxaEditavel) {
+  const campos = ['.f-tipoProdutoLabel', '.f-tipo', '.f-vencimento', '.f-fluxoPagamento', '.f-cashSweep', '.f-periodicidade', '.f-periodicidadeJurosCS', '.f-periodicidadeAmortCS'];
+  if (!taxaEditavel) campos.push('.f-taxa');
   campos.forEach((sel) => {
     const el = tr.querySelector(sel);
     if (el) el.disabled = bloqueado;
   });
   tr.classList.toggle('linha-cronograma-travada', bloqueado);
   const taxaEl = tr.querySelector('.f-taxa');
-  if (taxaEl) taxaEl.title = bloqueado ? 'Cronograma personalizado: taxa e datas fixas do material de distribuição, não editáveis.' : '';
+  if (taxaEl) {
+    taxaEl.disabled = bloqueado && !taxaEditavel;
+    taxaEl.title = !bloqueado ? '' : (taxaEditavel ? 'Taxa negociável para este ativo — o cronograma de amortização (datas e %) é fixo, mas a taxa pode ser ajustada.' : 'Cronograma personalizado: taxa e datas fixas do material de distribuição, não editáveis.');
+  }
   const aviso = tr.querySelector('.f-cronograma-aviso');
-  if (aviso) aviso.style.display = bloqueado ? '' : 'none';
+  if (aviso) {
+    aviso.style.display = bloqueado ? '' : 'none';
+    aviso.textContent = taxaEditavel ? '🔒 Fluxo próprio cadastrado — datas fixas, taxa negociável' : '🔒 Fluxo próprio cadastrado — dados fixos';
+  }
   // O nome não é "disabled" (input desabilitado não dispara o evento `change`, então o usuário
   // nunca conseguiria trocar de produto de volta) — em vez disso, fica readonly: não dá pra digitar,
   // mas o campo continua clicável/focável, então o listener de `change` no <input> segue funcionando
@@ -411,7 +423,7 @@ function preencherLinhaComProduto(tr, p) {
     delete tr.dataset.cronogramaPersonalizado;
     delete tr.dataset.cronograma;
   }
-  aplicarBloqueioCronograma(tr, !!p.cronogramaPersonalizado);
+  aplicarBloqueioCronograma(tr, !!p.cronogramaPersonalizado, !!p.taxaEditavel);
 }
 
 function buscarProdutoCadastradoPorNome(nome) {
@@ -535,7 +547,7 @@ function addLinha(prefill) {
     tr.dataset.cronogramaPersonalizado = '1';
     tr.dataset.cronograma = JSON.stringify(prefill.cronograma);
   }
-  aplicarBloqueioCronograma(tr, !!(prefill && prefill.cronogramaPersonalizado));
+  aplicarBloqueioCronograma(tr, !!(prefill && prefill.cronogramaPersonalizado), !!(prefill && prefill.taxaEditavel));
   atualizarTotal();
 }
 
@@ -2684,6 +2696,7 @@ document.getElementById('catalogoLista').addEventListener('click', async (e) => 
       periodicidadeAmortizacaoCashSweep: produto.periodicidadeAmortizacaoCashSweep,
       cronogramaPersonalizado: produto.cronogramaPersonalizado,
       cronograma: produto.cronograma,
+      taxaEditavel: produto.taxaEditavel,
     });
   } else if (e.target.classList.contains('cp-editar')) {
     document.getElementById('cp-id').value = produto.id;

@@ -253,6 +253,16 @@ app.post('/api/gerar', async (req, res) => {
       dataBase,
       arquivo: nomeArquivo,
       downloadUrl: `/api/download/${encodeURIComponent(nomeArquivo)}`,
+      // Dados de entrada originais (como o formulário enviou), pra "Editar" recarregar a simulação no
+      // formulário. O cronograma personalizado fica de fora de propósito: é grande e o catálogo é a
+      // fonte da verdade dele (ver ativosSaneados acima), então é re-lido do catálogo ao editar.
+      payload: {
+        cliente,
+        dataBase,
+        templateType,
+        assessor,
+        ativos: ativos.map(({ cronograma, ...resto }) => resto),
+      },
       produtos: ativosInput.map((a) => ({
         nome: a.nome,
         categoria: categoriaLabel(a.tipoProdutoLabel),

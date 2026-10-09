@@ -2503,8 +2503,129 @@ function escapeHtmlCliente(s) {
   return div.innerHTML;
 }
 
+const historicoEntradasPorId = new Map();
+
+// Recarrega uma simulação do histórico no formulário principal pra editar e gerar um novo PDF.
+// Entradas novas guardam o payload original; as antigas (anteriores a esse recurso) só têm o resumo
+// dos produtos, então são reconstruídas a partir do catálogo atual pelo nome — por isso o aviso.
+function ativoPayloadParaPrefill(a) {
+  const produto = buscarProdutoCadastradoPorNome(a.nome || '');
+  const taxaCliente = a.taxaAM ?? a.taxaAA ?? a.percentualCDI ?? a.spread;
+  const prefill = {
+    nome: a.nome,
+    tipoProdutoLabel: a.tipoProdutoLabel,
+    tipo: a.tipo,
+    taxa: taxaCliente,
+    vi: a.vi,
+    vencimento: a.vencimento,
+    isento: a.isento,
+    pagaCupomMensal: a.pagaCupomMensal,
+    reinvestir: a.reinvestir,
+    cashSweep: a.cashSweep,
+    periodicidadeCupom: a.periodicidadeCupom,
+    periodicidadeJurosCashSweep: a.periodicidadeJurosCashSweep,
+    periodicidadeAmortizacaoCashSweep: a.periodicidadeAmortizacaoCashSweep,
+    valorMinimo: produto ? produto.valorMinimo : undefined,
+  };
+  if (produto && produto.cronogramaPersonalizado) {
+    prefill.cronogramaPersonalizado = true;
+    prefill.cronograma = produto.cronograma;
+    prefill.taxaEditavel = produto.taxaEditavel;
+    if (!produto.taxaEditavel) prefill.taxa = produto.taxa;
+  }
+  return prefill;
+}
+
+function ativoLegadoParaPrefill(p) {
+  const produto = buscarProdutoCadastradoPorNome(p.nome || '');
+  if (produto) {
+    return {
+      nome: produto.nome,
+      tipoProdutoLabel: produto.categoria,
+      tipo: produto.tipo,
+      taxa: produto.taxa,
+      vi: p.vi,
+      vencimento: produto.vencimento || '',
+      isento: produto.isento,
+      pagaCupomMensal: produto.fluxoPagamento === 'distribuido' || produto.fluxoPagamento === 'reinvestido',
+      reinvestir: produto.fluxoPagamento === 'reinvestido',
+      cashSweep: produto.cashSweep,
+      periodicidadeCupom: produto.periodicidadeCupom,
+      periodicidadeJurosCashSweep: produto.periodicidadeJurosCashSweep,
+      periodicidadeAmortizacaoCashSweep: produto.periodicidadeAmortizacaoCashSweep,
+      valorMinimo: produto.valorMinimo,
+      cronogramaPersonalizado: produto.cronogramaPersonalizado,
+      cronograma: produto.cronograma,
+      taxaEditavel: produto.taxaEditavel,
+    };
+  }
+  // Fora do catálogo: recupera indexador e taxa do rótulo guardado no histórico
+  // ("CDI + 6,00% a.a.", "IPCA + 12,50% a.a.", "23,71% a.a.", "1,70% a.m.", "110% do CDI").
+  const rotulo = p.taxa || '';
+  const numero = parseFloat((rotulo.match(/\d+(?:[.,]\d+)?/) || [''])[0].replace(',', '.'));
+  let tipoRecuperado;
+  if (/IPCA/i.test(rotulo)) tipoRecuperado = 'ipca';
+  else if (/CDI\s*\+/i.test(rotulo)) tipoRecuperado = 'cdi';
+  else if (/CDI/i.test(rotulo)) tipoRecuperado = 'pctcdi';
+  else if (/a\.m\./i.test(rotulo)) tipoRecuperado = 'fixo';
+  else tipoRecuperado = 'fixoAA';
+  const [dia, mes, ano] = (p.vencimento || '').split('/');
+  return {
+    nome: p.nome,
+    tipoProdutoLabel: p.categoria,
+    tipo: tipoRecuperado,
+    taxa: Number.isFinite(numero) ? numero : '',
+    vi: p.vi,
+    vencimento: ano ? `${ano}-${mes}-${dia}` : '',
+    isento: !!p.isento,
+    pagaCupomMensal: p.fluxo === 'Distribuído' || p.fluxo === 'Reinvestido',
+    reinvestir: p.fluxo === 'Reinvestido',
+    cashSweep: !!p.cashSweep,
+  };
+}
+
+function editarSimulacaoDoHistorico(id) {
+  const e = historicoEntradasPorId.get(id);
+  if (!e) return;
+
+  const temDadosNoForm = document.getElementById('cliente').value.trim()
+    || [...document.querySelectorAll('#ativosBody .f-vi')].some((el) => Number(el.value) > 0);
+  if (temDadosNoForm && !confirm('Substituir o que está preenchido no formulário pela simulação do histórico?')) return;
+
+  const payload = e.payload;
+  const linhas = payload
+    ? payload.ativos.map(ativoPayloadParaPrefill)
+    : (e.produtos || []).map(ativoLegadoParaPrefill);
+
+  document.getElementById('cliente').value = e.cliente || '';
+  document.getElementById('templateType').value = e.templateType || 'renda';
+  const opcaoAssessor = [...assessorSelect.options].find((o) => o.value === e.assessor);
+  if (opcaoAssessor) {
+    assessorSelect.value = e.assessor;
+  } else {
+    assessorSelect.value = '__outro__';
+    assessorOutro.value = e.assessor || '';
+  }
+  assessorSelect.dispatchEvent(new Event('change'));
+
+  ativosBody.innerHTML = '';
+  linhas.forEach((prefill) => addLinha(prefill));
+  atualizarTotal();
+
+  const resultadoEl = document.getElementById('resultado');
+  resultadoEl.className = 'ok';
+  resultadoEl.style.display = 'block';
+  const aviso = payload
+    ? ''
+    : ' Simulação antiga: taxas e condições foram refeitas a partir do catálogo atual — confira antes de gerar.';
+  resultadoEl.textContent = `Simulação de ${e.cliente} carregada para edição. A data-base foi mantida em hoje (ajuste se precisar).${aviso} Ao gerar, o novo PDF entra no histórico como uma nova simulação.`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function renderHistorico(entradas) {
   const lista = document.getElementById('historicoLista');
+  historicoEntradasPorId.clear();
+  entradas.forEach((e) => historicoEntradasPorId.set(e.id, e));
   if (!entradas.length) {
     lista.innerHTML = '<div class="hist-vazio">Nenhuma simulação encontrada.</div>';
     return;
@@ -2526,12 +2647,17 @@ function renderHistorico(entradas) {
           VF líquido: <b>${fmtBRL(Math.round(e.resumo.vfLiquidoTotal))}</b> ·
           ≈${Math.round(e.resumo.pctDoCdi)}% do CDI
           <a class="hist-link" href="${e.downloadUrl}" download>Baixar PDF</a>
+          <button class="btn secondary small hist-editar" type="button" data-id="${escapeHtmlCliente(e.id)}" style="margin-left:6px;">Editar</button>
           <button class="btn danger small hist-excluir" type="button" data-id="${escapeHtmlCliente(e.id)}" style="margin-left:6px;">Excluir</button>
         </div>
         <div class="hist-produtos">${produtosHtml}</div>
       </div>
     `;
   }).join('');
+
+  lista.querySelectorAll('.hist-editar').forEach((btn) => {
+    btn.addEventListener('click', () => editarSimulacaoDoHistorico(btn.dataset.id));
+  });
 
   lista.querySelectorAll('.hist-excluir').forEach((btn) => {
     btn.addEventListener('click', async () => {

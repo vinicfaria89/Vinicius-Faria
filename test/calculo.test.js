@@ -10,6 +10,8 @@ const {
   calcularAtivo,
   calcularDurationAtivo,
   calcularCarteira,
+  calcularBenchmarkCdiMesmoFluxo,
+  mediaPagamentosLiquidos,
 } = require('../lib/calculo');
 const { diasUteisEntre } = require('../lib/calendario');
 
@@ -354,6 +356,79 @@ describe('calcularDurationAtivo — duration de Macaulay pondera pelos fluxos de
     const d = calcularDurationAtivo(ativo, c);
     assert.ok(d < c.dias / 365, 'amortização SAC antecipa devolução de principal -> duration menor');
     assert.ok(d > 0, 'duration positiva');
+  });
+});
+
+describe('Cash Sweep — prazo que não fecha em múltiplo da periodicidade', () => {
+  // 17 meses, taxa mensal exatamente 1%, juros e amortização semestrais, isento — números redondos
+  // pra conferir à mão: a última parcela de principal tem que cair NO VENCIMENTO (mês 17), não no mês 12.
+  const ativo = {
+    nome: 'x', tipo: 'fixoAA', taxaAA: Math.pow(1.01, 12) - 1, vi: 1200,
+    dataBase: new Date(2026, 0, 1), vencimento: new Date(2027, 5, 1),
+    isento: true, cashSweep: true,
+    periodicidadeJurosCashSweep: 'semestral', periodicidadeAmortizacaoCashSweep: 'semestral',
+  };
+
+  test('principal só é quitado no vencimento (3 parcelas: meses 6, 12 e 17), e o saldo nunca zera antes', () => {
+    const c = calcularAtivo(ativo, {});
+    assert.equal(c.cashSweep.nAmortizacoes, 3, 'ceil(17/6) = 3 parcelas');
+    assertClose(c.cashSweep.amortizacaoConstante, 400, 'parcela = 1200/3');
+    assert.deepEqual(c.cashSweep.saldoHistorico.map((p) => p.mes), [0, 6, 12, 17], 'amortizações nos meses 6, 12 e no vencimento');
+    assertClose(c.cashSweep.saldoHistorico[2].saldo, 400, 'ainda sobra 1/3 do principal após o mês 12');
+    assertClose(c.cashSweep.saldoHistorico[3].saldo, 0, 'zera exatamente no vencimento');
+  });
+
+  test('juros acumulados depois do último pagamento semestral são liquidados no vencimento (não se perdem)', () => {
+    const c = calcularAtivo(ativo, {});
+    // meses 1-6 sobre 1200 = 72; meses 7-12 sobre 800 = 48; meses 13-17 sobre 400 = 20 (pagos no mês 17)
+    assert.deepEqual(c.cashSweep.jurosHistorico.map((j) => j.mes), [6, 12, 17]);
+    assertClose(c.cupomLiquidos[0], 72, 'juros do 1º semestre');
+    assertClose(c.cupomLiquidos[1], 48, 'juros do 2º semestre');
+    assertClose(c.cupomLiquidos[2], 20, 'juros do resíduo final (5 meses) liquidados no vencimento');
+    assertClose(c.vfLiquido, 1200 + 140, 'VF = principal + todos os juros (72+48+20)');
+  });
+
+  test('prazo múltiplo da periodicidade continua idêntico ao comportamento anterior (sem parcela extra)', () => {
+    const c = calcularAtivo({ ...ativo, vencimento: new Date(2027, 0, 1) }, {});
+    assert.equal(c.cashSweep.nAmortizacoes, 2);
+    assert.deepEqual(c.cashSweep.saldoHistorico.map((p) => p.mes), [0, 6, 12]);
+    assert.equal(c.nPeriodos, 2);
+  });
+});
+
+describe('Benchmark "100% CDI sobre o mesmo saldo" e média de pagamentos', () => {
+  const dataBase = new Date(2026, 0, 1);
+  const ativo = {
+    nome: 'x', tipo: 'fixoAA', taxaAA: 0.30, vi: 1200, dataBase, vencimento: new Date(2027, 0, 1),
+    isento: false, cashSweep: true,
+    periodicidadeJurosCashSweep: 'mensal', periodicidadeAmortizacaoCashSweep: 'mensal',
+  };
+
+  test('reaplica o mesmo cronograma de saldo à taxa do CDI, bruto de IR', () => {
+    const cdi = 0.14;
+    const bench = calcularBenchmarkCdiMesmoFluxo(ativo, {}, cdi);
+    const c = calcularAtivo(ativo, {});
+    assert.deepEqual(bench.saldoHistorico, c.cashSweep.saldoHistorico, 'mesmas datas e parcelas de amortização');
+    const taxaMensal = Math.pow(1 + cdi, 1 / 12) - 1;
+    // SAC: saldo no início do mês m = 1200 * (12 - (m-1)) / 12; juros do mês = saldo * taxa mensal do CDI
+    let esperado = 0;
+    for (let m = 1; m <= 12; m++) esperado += 1200 * ((12 - (m - 1)) / 12) * taxaMensal;
+    const jurosCdi = bench.jurosHistorico.reduce((s, j) => s + j.valor, 0);
+    assertClose(jurosCdi, esperado, 'soma dos juros do CDI sobre o saldo devedor decrescente (sem IR)');
+  });
+
+  test('com a mesma taxa do ativo, o benchmark iguala os juros do próprio ativo isento', () => {
+    const isento = { ...ativo, isento: true };
+    const c = calcularAtivo(isento, {});
+    const bench = calcularBenchmarkCdiMesmoFluxo(isento, {}, c.iAnual);
+    assertClose(bench.vfBruto, c.vfLiquido, 'mesma taxa => mesmo valor final');
+  });
+
+  test('mediaPagamentosLiquidos: média dos cupons, e cai no 1º pagamento se não houver lista', () => {
+    assertClose(mediaPagamentosLiquidos({ cupomLiquidos: [100, 80, 60], cupomLiq: 100 }), 80, 'média de 100/80/60');
+    assertClose(mediaPagamentosLiquidos({ cupomLiquidos: [], cupomLiq: 55 }), 55, 'sem lista: usa cupomLiq');
+    const c = calcularAtivo({ ...ativo, isento: true }, {});
+    assert.ok(mediaPagamentosLiquidos(c) < c.cupomLiq, 'Cash Sweep com saldo caindo: média < 1º pagamento');
   });
 });
 

@@ -478,6 +478,39 @@ describe('cronograma personalizado — reproduz fielmente um fluxo irregular rea
     const c = calcularAtivo(ativo, {});
     assert.equal(c.nPeriodos, 1, 'só a parcela futura entra no fluxo; a passada é descartada');
   });
+
+  test('parcela com capitalizar: juros da carência viram saldo e voltam como juros depois', () => {
+    const iAnual = 0.15;
+    const carencia = new Date(2026, 6, 1);
+    const fim = new Date(2027, 0, 4);
+    const ativo = {
+      nome: 'x', tipo: 'fixoAA', taxaAA: iAnual, vi: 10000, dataBase, vencimento: fim,
+      isento: true, cronogramaPersonalizado: true,
+      cronograma: [
+        { data: carencia, pctAmortizar: 0, capitalizar: true },
+        { data: fim, pctAmortizar: 100 },
+      ],
+    };
+    const c = calcularAtivo(ativo, {});
+    const duTotal = diasUteisEntre(dataBase, carencia) + diasUteisEntre(carencia, fim);
+    assertClose(c.vfLiquido, 10000 * Math.pow(1 + iAnual, duTotal / 252), 'capitalizado na carência = composto contínuo no total');
+    assert.equal(c.nPeriodos, 1, 'a carência não gera pagamento');
+    assert.ok(c.cupomLiq > 10000 * (Math.pow(1 + iAnual, diasUteisEntre(carencia, fim) / 252) - 1), 'o pagamento inclui os juros capitalizados');
+  });
+
+  test('capitalizar com IR: o imposto incide sobre os juros capitalizados na data do pagamento', () => {
+    const iAnual = 0.15;
+    const carencia = new Date(2026, 6, 1);
+    const fim = new Date(2027, 11, 30);
+    const base = {
+      nome: 'x', tipo: 'fixoAA', taxaAA: iAnual, vi: 10000, dataBase, vencimento: fim, cronogramaPersonalizado: true,
+      cronograma: [{ data: carencia, pctAmortizar: 0, capitalizar: true }, { data: fim, pctAmortizar: 100 }],
+    };
+    const bruto = calcularAtivo({ ...base, isento: true }, {});
+    const liq = calcularAtivo({ ...base, isento: false }, {});
+    const lucro = bruto.vfLiquido - 10000;
+    assertClose(liq.vfLiquido, 10000 + lucro * (1 - aliquotaIR(diasEntre(dataBase, fim))), 'IR sobre todo o lucro, inclusive o capitalizado');
+  });
 });
 
 describe('calcularCarteira — durationAnos agregada (ponderada pelo VI)', () => {

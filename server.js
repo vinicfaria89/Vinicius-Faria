@@ -197,6 +197,7 @@ app.post('/api/gerar', async (req, res) => {
         base.cronograma = a.cronograma.map((p) => ({
           data: parseDataLocal(p.data),
           pctAmortizar: Number(p.pctAmortizar),
+          capitalizar: !!p.capitalizar,
         }));
       }
       if (a.tipo === 'fixo') base.taxaAM = Number(a.taxaAM) / 100;

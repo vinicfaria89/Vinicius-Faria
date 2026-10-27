@@ -1138,12 +1138,8 @@ function validarFormulario(dataBase) {
   return mensagens;
 }
 
-document.getElementById('gerarBtn').addEventListener('click', async () => {
-  const resultadoEl = document.getElementById('resultado');
-  resultadoEl.className = '';
-  resultadoEl.style.display = 'none';
-  limparErros();
-
+// Lê o formulário inteiro e devolve o que o servidor espera (usado pelo Gerar PDF e pela Pré-visualização).
+function coletarSimulacao() {
   const cliente = document.getElementById('cliente').value.trim();
   const dataBase = document.getElementById('dataBase').value;
   const templateType = document.getElementById('templateType').value;
@@ -1177,6 +1173,16 @@ document.getElementById('gerarBtn').addEventListener('click', async () => {
     }
     return ativo;
   });
+  return { cliente, dataBase, templateType, assessor, ativos };
+}
+
+document.getElementById('gerarBtn').addEventListener('click', async () => {
+  const resultadoEl = document.getElementById('resultado');
+  resultadoEl.className = '';
+  resultadoEl.style.display = 'none';
+  limparErros();
+
+  const { cliente, dataBase, templateType, assessor, ativos } = coletarSimulacao();
 
   const errosValidacao = validarFormulario(dataBase);
   if (errosValidacao.length > 0) {
@@ -1219,6 +1225,83 @@ document.getElementById('gerarBtn').addEventListener('click', async () => {
     document.getElementById('gerarBtn').textContent = 'Gerar PDF';
   }
 });
+
+// ===== Pré-visualização do relatório (mesmo HTML que vira o PDF, sem gerar arquivo nem gravar histórico) =====
+const previewOverlay = document.getElementById('previewOverlay');
+const previewFrame = document.getElementById('previewFrame');
+const previewPalco = document.getElementById('previewPalco');
+const previewCorpo = document.getElementById('previewCorpo');
+const PREVIEW_LARGURA = 794; // A4 a 96 dpi (210 mm) — largura das páginas do relatório
+
+function previewAjustarEscala() {
+  const h = previewFrame.dataset.altura ? Number(previewFrame.dataset.altura) : 0;
+  if (!h) return;
+  const escala = Math.min(1, (previewCorpo.clientWidth - 32) / PREVIEW_LARGURA);
+  previewFrame.style.width = `${PREVIEW_LARGURA}px`;
+  previewFrame.style.height = `${h}px`;
+  previewFrame.style.transform = `scale(${escala})`;
+  previewPalco.style.width = `${PREVIEW_LARGURA * escala}px`;
+  previewPalco.style.height = `${h * escala}px`;
+}
+window.addEventListener('resize', previewAjustarEscala);
+
+function fecharPreview() {
+  previewOverlay.hidden = true;
+  previewFrame.srcdoc = '';
+  delete previewFrame.dataset.altura;
+  document.body.style.overflow = '';
+}
+document.getElementById('previewFechar').addEventListener('click', fecharPreview);
+document.getElementById('previewGerar').addEventListener('click', () => {
+  fecharPreview();
+  const btn = document.getElementById('gerarBtn');
+  if (!btn.disabled) btn.click();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !previewOverlay.hidden) fecharPreview(); });
+
+async function abrirPreview() {
+  limparErros();
+  const resultadoEl = document.getElementById('resultado');
+  const sim = coletarSimulacao();
+  const erros = validarFormulario(sim.dataBase);
+  if (erros.length) {
+    resultadoEl.className = 'erro';
+    resultadoEl.style.display = 'block';
+    resultadoEl.textContent = erros.join(' ');
+    const primeiro = document.querySelector('.campo-erro');
+    if (primeiro) { primeiro.scrollIntoView({ block: 'center', behavior: 'smooth' }); primeiro.focus(); }
+    return;
+  }
+  resultadoEl.style.display = 'none';
+  const botoes = [document.getElementById('previewBtn'), document.getElementById('previewBtnBarra')];
+  botoes.forEach((b) => { b.disabled = true; b.dataset.rotulo = b.textContent; b.textContent = 'Montando…'; });
+  try {
+    const valorTotal = sim.ativos.reduce((s, a) => s + a.vi, 0);
+    const resp = await fetch('/api/preview', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...sim, valorTotal }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.erro || 'falha ao montar a pré-visualização');
+    document.getElementById('previewTitulo').textContent = `Pré-visualização — ${sim.cliente}`;
+    previewFrame.onload = () => {
+      // Altura real do conteúdo (todas as páginas empilhadas) pra o iframe não ter rolagem interna.
+      const doc = previewFrame.contentDocument;
+      previewFrame.dataset.altura = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0) + 4;
+      previewAjustarEscala();
+    };
+    previewFrame.srcdoc = data.html;
+    previewOverlay.hidden = false;
+    previewCorpo.scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+  } catch (err) {
+    mostrarToast(`Pré-visualização indisponível: ${err.message}`);
+  } finally {
+    botoes.forEach((b) => { b.disabled = false; b.textContent = b.dataset.rotulo; });
+  }
+}
+document.getElementById('previewBtn').addEventListener('click', abrirPreview);
+document.getElementById('previewBtnBarra').addEventListener('click', abrirPreview);
 
 // --- Calculadora Financeira (avulsa, fora do fluxo de simulação de carteira) ---
 

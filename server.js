@@ -118,13 +118,22 @@ app.get('/api/premissas', async (req, res) => {
   }
 });
 
-app.post('/api/gerar', async (req, res) => {
-  try {
-    const { cliente, dataBase, templateType, ativos } = req.body;
-    const assessor = (req.body.assessor || '').trim() || 'Vinícius Faria';
+// Erro de validação com status HTTP (a rota responde com ele em vez de 500).
+function erroHttp(status, mensagem) {
+  const e = new Error(mensagem);
+  e.status = status;
+  return e;
+}
+
+// Valida a entrada da simulação, aplica as regras do catálogo (fluxo fixo travado) e monta o relatório
+// (HTML + carteira calculada). Usada por /api/gerar (que depois gera o PDF e grava no histórico) e por
+// /api/preview (que só devolve o HTML pra pré-visualização na tela) — assim os dois NUNCA divergem.
+async function prepararRelatorio(body) {
+    const { cliente, dataBase, templateType, ativos } = body;
+    const assessor = (body.assessor || '').trim() || 'Vinícius Faria';
 
     if (!cliente || !dataBase || !templateType || !Array.isArray(ativos) || ativos.length === 0) {
-      return res.status(400).json({ erro: 'Campos obrigatórios: cliente, dataBase, templateType, ativos[]' });
+      throw erroHttp(400, 'Campos obrigatórios: cliente, dataBase, templateType, ativos[]');
     }
 
     const dataBaseObj = parseDataLocal(dataBase);
@@ -216,18 +225,18 @@ app.post('/api/gerar', async (req, res) => {
       const a = ativosInput[i];
       const n = i + 1;
       if (!(a.vi > 0)) {
-        return res.status(400).json({ erro: `Ativo ${n}: valor investido deve ser maior que 0.` });
+        throw erroHttp(400, `Ativo ${n}: valor investido deve ser maior que 0.`);
       }
       const taxa = a.taxaAM ?? a.taxaAA ?? a.percentualCDI ?? a.spread;
       if (!(taxa > 0)) {
-        return res.status(400).json({ erro: `Ativo ${n}: taxa deve ser maior que 0.` });
+        throw erroHttp(400, `Ativo ${n}: taxa deve ser maior que 0.`);
       }
     }
 
     const somaVi = ativosInput.reduce((s, a) => s + a.vi, 0);
-    const somaEsperada = Number(req.body.valorTotal || somaVi);
+    const somaEsperada = Number(body.valorTotal || somaVi);
     if (Math.abs(somaVi - somaEsperada) > 1) {
-      return res.status(400).json({ erro: `A soma do Valor Investido dos ativos (${somaVi}) não bate com o Valor Total informado (${somaEsperada}).` });
+      throw erroHttp(400, `A soma do Valor Investido dos ativos (${somaVi}) não bate com o Valor Total informado (${somaEsperada}).`);
     }
 
     const [curvaAnbima, curvaB3Pre] = await Promise.all([anbima.getCurvaANBIMA(), b3.getCurvaPRE()]);
@@ -241,6 +250,24 @@ app.post('/api/gerar', async (req, res) => {
       assessor,
       medirAlturasCards,
     });
+    return { html, carteira, ativosInput, cliente, dataBase, templateType, assessor, ativos };
+}
+
+// Pré-visualização: mesmo relatório do PDF, só que como HTML (sem gerar arquivo nem gravar histórico).
+app.post('/api/preview', async (req, res) => {
+  try {
+    const { html } = await prepararRelatorio(req.body || {});
+    res.json({ html });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ erro: err.message });
+    console.error('[preview] falha:', err);
+    res.status(500).json({ erro: mensagemAmigavel(err) });
+  }
+});
+
+app.post('/api/gerar', async (req, res) => {
+  try {
+    const { html, carteira, ativosInput, cliente, dataBase, templateType, assessor, ativos } = await prepararRelatorio(req.body || {});
 
     const nomeArquivo = `${cliente.replace(/[^\p{L}\p{N}]+/gu, '_')}_${templateType === 'renda' ? 'Renda_Mensal' : 'Crescimento_Patrimonio'}_${Date.now()}.pdf`;
     const pdfPath = await gerarPdfDeHtml(html, nomeArquivo, OUTPUT_DIR);
@@ -297,6 +324,7 @@ app.post('/api/gerar', async (req, res) => {
       },
     });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ erro: err.message });
     console.error('[gerar] falha ao gerar simulação:', err);
     res.status(500).json({ erro: mensagemAmigavel(err) });
   }

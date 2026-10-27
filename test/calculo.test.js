@@ -479,6 +479,17 @@ describe('cronograma personalizado — reproduz fielmente um fluxo irregular rea
     assert.equal(c.nPeriodos, 1, 'só a parcela futura entra no fluxo; a passada é descartada');
   });
 
+  test('periodicidade dos juros do cronograma é derivada das datas (mensal / semestral / anual)', () => {
+    const base = { nome: 'x', tipo: 'fixoAA', taxaAA: 0.15, vi: 10000, dataBase, isento: true, cronogramaPersonalizado: true };
+    const mk = (datas) => ({ ...base, vencimento: datas[datas.length - 1], cronograma: datas.map((d, i) => ({ data: d, pctAmortizar: i === datas.length - 1 ? 100 : 0 })) });
+    const mensal = [1, 2, 3, 4].map((m) => new Date(2026, m, 15));
+    const semestral = [new Date(2026, 6, 15), new Date(2027, 0, 15), new Date(2027, 6, 15)];
+    const anual = [new Date(2027, 0, 15), new Date(2028, 0, 15)];
+    assert.equal(calcularAtivo(mk(mensal), {}).periodicidadeCupom, 'mensal');
+    assert.equal(calcularAtivo(mk(semestral), {}).periodicidadeCupom, 'semestral');
+    assert.equal(calcularAtivo(mk(anual), {}).periodicidadeCupom, 'anual');
+  });
+
   test('parcela com capitalizar: juros da carência viram saldo e voltam como juros depois', () => {
     const iAnual = 0.15;
     const carencia = new Date(2026, 6, 1);

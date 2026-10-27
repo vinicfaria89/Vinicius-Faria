@@ -48,6 +48,29 @@ document.addEventListener('paste', (e) => {
   }
 });
 
+// --- Acessibilidade: liga cada <label> solto ao campo do mesmo bloco -----------------------------------
+// Muitos rótulos do formulário são "<div><label>Texto</label><input></div>" sem `for`/`id`: leitor de tela
+// não anuncia o campo e clicar no rótulo não foca nada. Aqui, o primeiro campo do bloco do rótulo é
+// associado a ele (gerando um id se faltar). Roda no carregamento e em tudo que for criado depois
+// (cards de Novação, linhas da carteira etc.) via MutationObserver.
+let contadorRotulos = 0;
+function ligarRotulos(raiz) {
+  (raiz.querySelectorAll ? raiz.querySelectorAll('label:not([for])') : []).forEach((rotulo) => {
+    if (rotulo.querySelector('input,select,textarea')) return; // rótulo que envolve o campo já está associado
+    const bloco = rotulo.parentElement;
+    if (!bloco) return;
+    // Primeiro campo DEPOIS do rótulo que ainda não tem rótulo — vale também quando o bloco tem vários pares.
+    const campo = [...bloco.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea')]
+      .find((c) => (rotulo.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) && !(c.labels && c.labels.length) && !c.getAttribute('aria-label'));
+    if (!campo) return;
+    if (!campo.id) { contadorRotulos += 1; campo.id = `campo-auto-${contadorRotulos}`; }
+    rotulo.htmlFor = campo.id;
+  });
+}
+ligarRotulos(document);
+new MutationObserver((muts) => muts.forEach((m) => m.addedNodes.forEach((n) => { if (n.nodeType === 1) ligarRotulos(n.matches && n.matches('label') ? n.parentElement : n); })))
+  .observe(document.body, { childList: true, subtree: true });
+
 // Estado "ativo" nos botões do header (Produtos/Calculadora/Novação) — reflete qual painel está
 // aberto no momento, já que os 3 podem ficar visualmente idênticos sem isso. Chamado depois de toda
 // ação que abre/fecha um dos 3 cards (ver toggleCatalogo/toggleCalculadora/toggleNovacao e os
@@ -790,7 +813,8 @@ function mostrarToast(mensagem) {
   el.textContent = mensagem;
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 2800);
+  // Mensagens longas (erros, avisos) ficam mais tempo na tela.
+  toastTimer = setTimeout(() => { el.hidden = true; }, Math.min(9000, 2800 + mensagem.length * 45));
 }
 
 // ===== Dividir o valor total igualmente entre os ativos =====
@@ -2082,7 +2106,7 @@ document.getElementById('nv-salvarAplicacao').addEventListener('click', async ()
     isentoAtual: document.getElementById('nv-isentoAtual').checked,
   };
   if (!payload.nome) {
-    alert('Preencha o "Nome do ativo" antes de salvar, pra reconhecer essa aplicação depois.');
+    mostrarToast('Preencha o "Nome do ativo" antes de salvar, pra reconhecer essa aplicação depois.');
     return;
   }
   try {
@@ -2097,7 +2121,7 @@ document.getElementById('nv-salvarAplicacao').addEventListener('click', async ()
     document.getElementById('nv-aplicacaoSalva').value = data.aplicacao.id;
     document.getElementById('nv-removerAplicacao').style.display = '';
   } catch (err) {
-    alert(`Não foi possível salvar: ${err.message}`);
+    mostrarToast(`Não foi possível salvar: ${err.message}`);
   }
 });
 
@@ -2111,7 +2135,7 @@ document.getElementById('nv-removerAplicacao').addEventListener('click', async (
     await nvCarregarAplicacoesSalvas();
     document.getElementById('nv-removerAplicacao').style.display = 'none';
   } catch (err) {
-    alert(`Não foi possível remover: ${err.message}`);
+    mostrarToast(`Não foi possível remover: ${err.message}`);
   }
 });
 
@@ -2593,7 +2617,7 @@ document.getElementById('nv-salvarSugerida').addEventListener('click', async () 
     vencimento: document.getElementById('nv-sugVencimento').value,
   };
   if (!payload.nome || !(payload.taxa > 0)) {
-    alert('Preencha nome e taxa (maior que 0) antes de adicionar ao catálogo.');
+    mostrarToast('Preencha nome e taxa (maior que 0) antes de adicionar ao catálogo.');
     return;
   }
   try {
@@ -2609,7 +2633,7 @@ document.getElementById('nv-salvarSugerida').addEventListener('click', async () 
     document.getElementById('nv-sugVencimento').value = '';
     await nvCarregarSugeridas();
   } catch (err) {
-    alert(`Não foi possível salvar: ${err.message}`);
+    mostrarToast(`Não foi possível salvar: ${err.message}`);
   }
 });
 
@@ -3206,13 +3230,13 @@ function ativoLegadoParaPrefill(p) {
   };
 }
 
-function editarSimulacaoDoHistorico(id) {
+async function editarSimulacaoDoHistorico(id) {
   const e = historicoEntradasPorId.get(id);
   if (!e) return;
 
   const temDadosNoForm = document.getElementById('cliente').value.trim()
     || [...document.querySelectorAll('#ativosBody .f-vi')].some((el) => Number(el.value) > 0);
-  if (temDadosNoForm && !confirm('Substituir o que está preenchido no formulário pela simulação do histórico?')) return;
+  if (temDadosNoForm && !(await confirmarAcao('Substituir o que está preenchido no formulário pela simulação do histórico?'))) return;
 
   const payload = e.payload;
   const linhas = payload
@@ -3284,7 +3308,7 @@ function renderHistorico(entradas) {
 
   lista.querySelectorAll('.hist-excluir').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      if (!confirm('Excluir esta simulação do histórico? O PDF já gerado não será apagado.')) return;
+      if (!(await confirmarAcao('Excluir esta simulação do histórico? O PDF já gerado não será apagado.'))) return;
       try {
         const resp = await fetch(`/api/historico/${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
         if (!resp.ok) {
@@ -3293,7 +3317,7 @@ function renderHistorico(entradas) {
         }
         carregarHistorico();
       } catch (err) {
-        alert(`Não foi possível excluir: ${err.message}`);
+        mostrarToast(`Não foi possível excluir: ${err.message}`);
       }
     });
   });
@@ -3530,8 +3554,8 @@ document.getElementById('catalogoForm').addEventListener('submit', async (e) => 
 
   const taxaEl = document.getElementById('cp-taxa');
   const valorMinimoEl = document.getElementById('cp-valorMinimo');
-  if (Number(taxaEl.value) < 0) { alert('A taxa não pode ser negativa.'); taxaEl.focus(); return; }
-  if (Number(valorMinimoEl.value) < 0) { alert('O valor mínimo não pode ser negativo.'); valorMinimoEl.focus(); return; }
+  if (Number(taxaEl.value) < 0) { mostrarToast('A taxa não pode ser negativa.'); taxaEl.focus(); return; }
+  if (Number(valorMinimoEl.value) < 0) { mostrarToast('O valor mínimo não pode ser negativo.'); valorMinimoEl.focus(); return; }
 
   const payload = {
     id: document.getElementById('cp-id').value || undefined,
@@ -3719,7 +3743,7 @@ document.getElementById('catalogoExportar').addEventListener('click', async () =
     const dataHoje = new Date().toISOString().slice(0, 10);
     csvBaixarArquivo(`catalogo_produtos_${dataHoje}.csv`, conteudo);
   } catch (err) {
-    alert(`Não foi possível exportar o catálogo: ${err.message}`);
+    mostrarToast(`Não foi possível exportar o catálogo: ${err.message}`);
   } finally {
     btn.disabled = false;
     btn.textContent = textoOriginal;

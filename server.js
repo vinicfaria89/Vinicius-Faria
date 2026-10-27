@@ -9,6 +9,7 @@ const { montarRelatorioOficial, montarRelatorioNovacao, montarRelatorioNovacaoMu
 const { gerarPdfDeHtml, medirAlturasCards, encerrarBrowser } = require('./lib/pdf');
 const { parseDataLocal, dataDDMMAAAA } = require('./lib/format');
 const historico = require('./lib/historico');
+const clientesBase = require('./lib/clientes');
 const produtosCatalogo = require('./lib/produtos');
 const calculadora = require('./lib/calculadoraFinanceira');
 const { calcularNovacao } = require('./lib/novacao');
@@ -297,6 +298,12 @@ app.post('/api/gerar', async (req, res) => {
     console.error('[gerar] falha ao gerar simulação:', err);
     res.status(500).json({ erro: mensagemAmigavel(err) });
   }
+});
+
+// Base de clientes (importada do Pipedrive — ver lib/clientes.js): lista compacta pro seletor da tela
+// e metadados (data da última atualização, resumo do que mudou).
+app.get('/api/clientes', (req, res) => {
+  res.json({ meta: clientesBase.meta(), clientes: clientesBase.listaCompacta() });
 });
 
 app.get('/api/historico', (req, res) => {

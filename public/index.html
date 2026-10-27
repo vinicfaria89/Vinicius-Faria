@@ -116,6 +116,23 @@
   #resultado.erro { background:#f6e6e6; color:#7a2b2b; display:block; }
   #resultado a.btn { display:inline-block; margin-top:8px; text-decoration:none; }
   .premissas { font-size:10.5px; color:#5a5847; margin-top:6px; }
+  .premissas.aviso { color:#8a5a14; font-weight:700; }
+  /* Seletor de cliente (lista suspensa + busca por parte do nome) */
+  .cb-wrap { position:relative; }
+  .cb-wrap input { padding-right:28px; }
+  .cb-seta { position:absolute; right:1px; bottom:1px; height:30px; width:28px; border:none; background:transparent; cursor:pointer; color:#5a5847; font-size:13px; }
+  .cb-lista { position:absolute; z-index:30; left:0; right:0; top:100%; margin:2px 0 0; padding:4px; list-style:none; max-height:280px; overflow-y:auto; background:#fff; border:1px solid #DCD8D5; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.12); }
+  .cb-lista[hidden] { display:none; }
+  .cb-lista li { padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12.5px; display:flex; justify-content:space-between; gap:10px; }
+  .cb-lista li small { color:#8a886f; font-size:10.5px; white-space:nowrap; }
+  .cb-lista li[aria-selected=true], .cb-lista li:hover { background:#eef3e2; }
+  .cb-lista li.cb-vazio { cursor:default; color:#8a886f; }
+  .cb-lista li mark { background:#dfeccb; color:inherit; padding:0; }
+  .cliente-perfil { margin-top:12px; padding:10px 14px; background:#f6f4ec; border:1px solid #e2ded0; border-radius:8px; display:flex; flex-wrap:wrap; gap:6px 22px; font-size:11.5px; align-items:baseline; }
+  .cliente-perfil[hidden] { display:none; }
+  .cliente-perfil b { color:#1f1f14; font-size:12.5px; }
+  .cliente-perfil .cp-item span { display:block; font-size:9.5px; color:#8a886f; text-transform:uppercase; letter-spacing:0.03em; }
+  .cliente-perfil .cp-limpar { margin-left:auto; }
   .hist-item { border:1px solid #e3e0d3; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
   .hist-item .hist-topo { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px; font-size:11.5px; }
   .hist-item .hist-topo b { color:#1f1f14; }
@@ -257,9 +274,11 @@
   <div class="card">
     <h2>Dados gerais</h2>
     <div class="grid3">
-      <div>
-        <label>Cliente</label>
-        <input type="text" id="cliente" placeholder="Nome do cliente">
+      <div class="cb-wrap">
+        <label for="cliente">Cliente</label>
+        <input type="text" id="cliente" placeholder="Digite parte do nome ou escolha na lista" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="clienteLista" aria-autocomplete="list">
+        <button type="button" class="cb-seta" id="clienteSeta" aria-label="Abrir lista de clientes" tabindex="-1">▾</button>
+        <ul id="clienteLista" class="cb-lista" role="listbox" hidden></ul>
       </div>
       <div>
         <label>Data-base</label>
@@ -273,30 +292,13 @@
         </select>
       </div>
     </div>
+    <div id="clientePerfil" class="cliente-perfil" hidden></div>
     <div class="grid3" style="margin-top:14px;">
       <div>
-        <label>Assessor</label>
+        <label for="assessorSelect">Assessor</label>
         <select id="assessorSelect">
-          <option value="Alexandre Gonçalves Moreira Junior">Alexandre Gonçalves Moreira Junior</option>
-          <option value="André Paim">André Paim</option>
-          <option value="Aurelio Hideaki Cintori">Aurelio Hideaki Cintori</option>
-          <option value="Caroline Cardeal Calegari da Silva">Caroline Cardeal Calegari da Silva</option>
-          <option value="Fabio Moreira da Silva">Fabio Moreira da Silva</option>
-          <option value="Henrico Natel">Henrico Natel</option>
-          <option value="Italo Beltran Izzo">Italo Beltran Izzo</option>
-          <option value="Laura de Oliveira Pessoa Mendes">Laura de Oliveira Pessoa Mendes</option>
-          <option value="Lucas Calandra">Lucas Calandra</option>
-          <option value="Lucas dos Anjos Silva">Lucas dos Anjos Silva</option>
-          <option value="Marco Anthonio Ferreira Berlanga">Marco Anthonio Ferreira Berlanga</option>
-          <option value="Mateus Tibério">Mateus Tibério</option>
-          <option value="Murillo Pinheiro">Murillo Pinheiro</option>
-          <option value="Rakelly Souza Oliveira">Rakelly Souza Oliveira</option>
-          <option value="Renan Augusto Nascimento">Renan Augusto Nascimento</option>
-          <option value="Thiago Passos Vieira">Thiago Passos Vieira</option>
-          <option value="Victor Bruno Neves">Victor Bruno Neves</option>
-          <option value="Vinícius Faria">Vinícius Faria</option>
-          <option value="Walacy Matheus Alves Santos">Walacy Matheus Alves Santos</option>
-          <option value="__outro__">Outro (digitar)</option>
+          <option value="Vinícius Faria" selected>Vinícius Faria</option>
+          <option value="__outro__">Outro assessor (digitar o nome)</option>
         </select>
       </div>
       <div id="assessorOutroWrap" style="display:none;">
@@ -305,6 +307,7 @@
       </div>
     </div>
     <div class="premissas" id="premissasInfo">Carregando premissas de mercado (BACEN)…</div>
+    <div class="premissas" id="clientesInfo"></div>
   </div>
 
   <div class="card" id="catalogoCard" style="display:none;">
@@ -1073,6 +1076,6 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
   </tr>
 </template>
 
-<script src="app.js?v=2026100902"></script>
+<script src="app.js?v=2026102802"></script>
 </body>
 </html>

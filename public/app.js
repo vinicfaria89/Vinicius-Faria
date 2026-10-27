@@ -645,6 +645,156 @@ function obterAssessor() {
   if (assessorSelect.value === '__outro__') return assessorOutro.value.trim();
   return assessorSelect.value;
 }
+// Lembra o último "outro assessor" digitado, pra não redigitar a cada simulação.
+try {
+  const lembrado = localStorage.getItem('gcb.outroAssessor');
+  if (lembrado) assessorOutro.value = lembrado;
+} catch (_) { /* localStorage indisponível: segue sem lembrar */ }
+assessorOutro.addEventListener('change', () => {
+  try { localStorage.setItem('gcb.outroAssessor', assessorOutro.value.trim()); } catch (_) { /* sem localStorage */ }
+});
+
+// ===== Cliente: lista suspensa + busca por parte do nome (base do Pipedrive, ver lib/clientes.js) =====
+const seletorCliente = (() => {
+  const input = document.getElementById('cliente');
+  const lista = document.getElementById('clienteLista');
+  const seta = document.getElementById('clienteSeta');
+  const perfil = document.getElementById('clientePerfil');
+  const info = document.getElementById('clientesInfo');
+  const LIMITE = 60;
+  let base = []; // { ..., busca } — nome normalizado (sem acento, minúsculo) pra casar "joao" com "João"
+  let visiveis = [];
+  let ativo = -1;
+  let escolhido = null;
+
+  const normalizar = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const brl0 = (v) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }));
+
+  function filtrar(texto) {
+    const tokens = normalizar(texto).split(/\s+/).filter(Boolean);
+    if (!tokens.length) return base.slice(0, LIMITE);
+    const achados = base.filter((c) => tokens.every((t) => c.busca.includes(t)));
+    // Quem começa com o que foi digitado vem primeiro; depois por ordem alfabética (a base já vem ordenada).
+    const ini = tokens[0];
+    achados.sort((a, b) => (b.busca.startsWith(ini) - a.busca.startsWith(ini)));
+    return achados.slice(0, LIMITE);
+  }
+
+  function destacar(nome, texto) {
+    const tokens = normalizar(texto).split(/\s+/).filter(Boolean);
+    if (!tokens.length) return esc(nome);
+    const norm = normalizar(nome);
+    // normalizar() preserva o comprimento (só remove marcas combinantes após NFD) na maioria dos nomes;
+    // se divergir, mostra sem destaque em vez de marcar o trecho errado.
+    if (norm.length !== nome.length) return esc(nome);
+    const marca = new Array(nome.length).fill(false);
+    tokens.forEach((t) => { let p = norm.indexOf(t); while (p !== -1) { for (let k = p; k < p + t.length; k++) marca[k] = true; p = norm.indexOf(t, p + t.length); } });
+    let out = ''; let aberto = false;
+    for (let k = 0; k < nome.length; k++) {
+      if (marca[k] && !aberto) { out += '<mark>'; aberto = true; }
+      if (!marca[k] && aberto) { out += '</mark>'; aberto = false; }
+      out += esc(nome[k]);
+    }
+    return out + (aberto ? '</mark>' : '');
+  }
+
+  function desenhar(texto) {
+    visiveis = filtrar(texto);
+    ativo = visiveis.length ? 0 : -1;
+    if (!base.length) {
+      lista.innerHTML = '<li class="cb-vazio">Base de clientes ainda não carregada. Digite o nome livremente.</li>';
+    } else if (!visiveis.length) {
+      lista.innerHTML = '<li class="cb-vazio">Nenhum cliente encontrado — o nome digitado será usado como está.</li>';
+    } else {
+      lista.innerHTML = visiveis.map((c, i) => `<li role="option" data-i="${i}" aria-selected="${i === ativo}"><span>${destacar(c.n, texto)}</span><small>${esc(c.s || '')}</small></li>`).join('')
+        + (visiveis.length === LIMITE ? '<li class="cb-vazio">Mostrando os primeiros 60 — digite para filtrar.</li>' : '');
+    }
+  }
+
+  function abrir() { desenhar(escolhido && escolhido.n === input.value ? '' : input.value); lista.hidden = false; input.setAttribute('aria-expanded', 'true'); }
+  function fechar() { lista.hidden = true; input.setAttribute('aria-expanded', 'false'); }
+  function marcarAtivo(novo) {
+    const itens = lista.querySelectorAll('li[role=option]');
+    if (!itens.length) return;
+    ativo = (novo + itens.length) % itens.length;
+    itens.forEach((li, i) => li.setAttribute('aria-selected', String(i === ativo)));
+    itens[ativo].scrollIntoView({ block: 'nearest' });
+  }
+
+  function mostrarPerfil(c) {
+    if (!c) { perfil.hidden = true; perfil.innerHTML = ''; return; }
+    const item = (rotulo, valor) => `<div class="cp-item"><span>${rotulo}</span>${valor}</div>`;
+    const ultimo = c.u ? c.u.split('-').reverse().join('/') : '—';
+    perfil.innerHTML = item('Cliente', `<b>${esc(c.n)}</b>`)
+      + item('Status', esc(c.s || '—'))
+      + item('Em custódia', brl0(c.c))
+      + item('Saldo disponível', brl0(c.d))
+      + item('Renda declarada', brl0(c.r))
+      + item('Último investimento', ultimo);
+    perfil.hidden = false;
+  }
+
+  function escolher(c) {
+    escolhido = c;
+    input.value = c.n;
+    input.dataset.pipedriveId = c.i;
+    mostrarPerfil(c);
+    fechar();
+    input.classList.remove('campo-erro');
+  }
+
+  // Chamado também ao editar uma simulação do histórico: se o nome bate com alguém da base, mostra o perfil.
+  function sincronizarComNome() {
+    const alvo = normalizar(input.value);
+    const c = alvo ? base.find((x) => x.busca === alvo) : null;
+    escolhido = c || null;
+    if (c) input.dataset.pipedriveId = c.i; else delete input.dataset.pipedriveId;
+    mostrarPerfil(c);
+  }
+
+  input.addEventListener('input', () => {
+    if (escolhido && escolhido.n !== input.value) { escolhido = null; delete input.dataset.pipedriveId; mostrarPerfil(null); }
+    abrir();
+  });
+  input.addEventListener('focus', abrir);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (lista.hidden) abrir(); else marcarAtivo(ativo + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); marcarAtivo(ativo - 1); }
+    else if (e.key === 'Enter' && !lista.hidden && visiveis[ativo]) { e.preventDefault(); escolher(visiveis[ativo]); }
+    else if (e.key === 'Escape') fechar();
+  });
+  input.addEventListener('blur', () => { setTimeout(() => { fechar(); sincronizarComNome(); }, 120); });
+  seta.addEventListener('mousedown', (e) => { e.preventDefault(); if (lista.hidden) { input.focus(); abrir(); } else fechar(); });
+  lista.addEventListener('mousedown', (e) => {
+    const li = e.target.closest('li[role=option]');
+    if (!li) return;
+    e.preventDefault();
+    escolher(visiveis[Number(li.dataset.i)]);
+  });
+
+  async function carregar() {
+    try {
+      const resp = await fetch('/api/clientes');
+      const dados = await resp.json();
+      base = (dados.clientes || []).map((c) => ({ ...c, busca: normalizar(c.n) }));
+      const m = dados.meta || {};
+      if (m.atualizadoEm) {
+        const data = new Date(m.atualizadoEm).toLocaleDateString('pt-BR');
+        info.textContent = `Base de clientes (Pipedrive): ${base.length.toLocaleString('pt-BR')} contatos · atualizada em ${data}`
+          + (m.desatualizada ? ' — revisão mensal (dia 5) pendente: peça ao Claude para atualizar a base.' : '');
+        info.classList.toggle('aviso', !!m.desatualizada);
+      } else {
+        info.textContent = 'Base de clientes (Pipedrive) ainda não importada — digite o nome do cliente livremente.';
+      }
+      sincronizarComNome();
+    } catch (_) {
+      info.textContent = 'Não foi possível carregar a base de clientes — digite o nome livremente.';
+    }
+  }
+  carregar();
+  return { sincronizarComNome };
+})();
 
 // Remove o destaque de erro assim que o usuário mexe no campo (não precisa clicar em "Gerar PDF" de novo pra ver que corrigiu).
 document.addEventListener('input', (e) => e.target.classList && e.target.classList.remove('campo-erro'));
@@ -2598,6 +2748,7 @@ function editarSimulacaoDoHistorico(id) {
     : (e.produtos || []).map(ativoLegadoParaPrefill);
 
   document.getElementById('cliente').value = e.cliente || '';
+  seletorCliente.sincronizarComNome();
   document.getElementById('templateType').value = e.templateType || 'renda';
   const opcaoAssessor = [...assessorSelect.options].find((o) => o.value === e.assessor);
   if (opcaoAssessor) {

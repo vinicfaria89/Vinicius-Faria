@@ -12,6 +12,8 @@ const historico = require('./lib/historico');
 const clientesBase = require('./lib/clientes');
 const modelosCarteira = require('./lib/modelos');
 const { lerLaminaPdf, recortarPdf } = require('./lib/leitorLamina');
+const { calcularCarteira } = require('./lib/calculo');
+const { resumirCarteira, destaques: destaquesComparacao } = require('./lib/comparacao');
 const produtosCatalogo = require('./lib/produtos');
 const calculadora = require('./lib/calculadoraFinanceira');
 const { calcularNovacao } = require('./lib/novacao');
@@ -128,7 +130,7 @@ function erroHttp(status, mensagem) {
 // Valida a entrada da simulação, aplica as regras do catálogo (fluxo fixo travado) e monta o relatório
 // (HTML + carteira calculada). Usada por /api/gerar (que depois gera o PDF e grava no histórico) e por
 // /api/preview (que só devolve o HTML pra pré-visualização na tela) — assim os dois NUNCA divergem.
-async function prepararRelatorio(body) {
+async function prepararCarteira(body) {
     const { cliente, dataBase, templateType, ativos } = body;
     const assessor = (body.assessor || '').trim() || 'Vinícius Faria';
 
@@ -241,17 +243,50 @@ async function prepararRelatorio(body) {
 
     const [curvaAnbima, curvaB3Pre] = await Promise.all([anbima.getCurvaANBIMA(), b3.getCurvaPRE()]);
     const curvas = { anbima: curvaAnbima, b3Pre: curvaB3Pre };
-    const { html, carteira } = await montarRelatorioOficial({
-      cliente,
-      dataBase: dataBaseObj,
-      ativosInput,
-      templateType,
-      curvas,
-      assessor,
-      medirAlturasCards,
-    });
-    return { html, carteira, ativosInput, cliente, dataBase, templateType, assessor, ativos };
+    return { dataBaseObj, curvas, ativosInput, cliente, dataBase, templateType, assessor, ativos };
 }
+
+async function prepararRelatorio(body) {
+  const base = await prepararCarteira(body);
+  const { html, carteira } = await montarRelatorioOficial({
+    cliente: base.cliente,
+    dataBase: base.dataBaseObj,
+    ativosInput: base.ativosInput,
+    templateType: base.templateType,
+    curvas: base.curvas,
+    assessor: base.assessor,
+    medirAlturasCards,
+  });
+  return { ...base, html, carteira };
+}
+
+// Comparação de simulações: recebe até 3 cenários ({ rotulo, ...corpo do /api/gerar }) e devolve um resumo
+// comparável de cada um, calculado com as mesmas curvas de mercado (ver lib/comparacao.js).
+app.post('/api/comparar', async (req, res) => {
+  try {
+    const cenarios = Array.isArray(req.body && req.body.cenarios) ? req.body.cenarios : [];
+    if (cenarios.length < 2 || cenarios.length > 3) {
+      return res.status(400).json({ erro: 'Escolha de 2 a 3 simulações para comparar.' });
+    }
+    const resumos = [];
+    for (let i = 0; i < cenarios.length; i += 1) {
+      const c = cenarios[i];
+      try {
+        const base = await prepararCarteira(c);
+        const carteira = calcularCarteira(base.ativosInput.map((a) => ({ ...a, dataBase: base.dataBaseObj })), base.curvas);
+        resumos.push(resumirCarteira(carteira, c.rotulo || `Simulação ${i + 1}`));
+      } catch (err) {
+        if (err.status) throw erroHttp(err.status, `${c.rotulo || `Simulação ${i + 1}`}: ${err.message}`);
+        throw err;
+      }
+    }
+    res.json({ cenarios: resumos, destaques: destaquesComparacao(resumos) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ erro: err.message });
+    console.error('[comparar] falha:', err);
+    res.status(500).json({ erro: mensagemAmigavel(err) });
+  }
+});
 
 // Pré-visualização: mesmo relatório do PDF, só que como HTML (sem gerar arquivo nem gravar histórico).
 app.post('/api/preview', async (req, res) => {

@@ -1303,6 +1303,119 @@ async function abrirPreview() {
 document.getElementById('previewBtn').addEventListener('click', abrirPreview);
 document.getElementById('previewBtnBarra').addEventListener('click', abrirPreview);
 
+// ===== Comparar simulações (carteira atual x histórico, até 3) =====
+const compararOverlay = document.getElementById('compararOverlay');
+let compararEntradas = new Map(); // id -> entrada do histórico (só as que guardam o payload)
+
+const CMP_LINHAS = [
+  { chave: 'viTotal', rotulo: 'Total investido', fmt: 'brl' },
+  { chave: 'vfLiquidoTotal', rotulo: 'Valor futuro líquido', fmt: 'brl' },
+  { chave: 'ganhoLiquido', rotulo: 'Ganho líquido', fmt: 'brl' },
+  { chave: 'retornoLiquidoPct', rotulo: 'Retorno líquido total', fmt: 'pct' },
+  { chave: 'cagrPct', rotulo: 'Taxa anualizada (CAGR)', fmt: 'pct' },
+  { chave: 'pctDoCdi', rotulo: '% do CDI projetado', fmt: 'pct0' },
+  { chave: 'irTotal', rotulo: 'Imposto de renda', fmt: 'brl' },
+  { chave: 'rendaMensalMedia', rotulo: 'Renda mensal média (líq.)', fmt: 'brl', soSeAlgum: true },
+  { chave: 'rendaSemestralMedia', rotulo: 'Renda semestral média (líq.)', fmt: 'brl', soSeAlgum: true },
+  { chave: 'prazoMedioAnos', rotulo: 'Prazo médio', fmt: 'anos' },
+  { chave: 'durationAnos', rotulo: 'Duration', fmt: 'anos' },
+  { chave: 'vencimentoMaisLongo', rotulo: 'Vencimento mais longo', fmt: 'data' },
+  { chave: 'nAtivos', rotulo: 'Nº de ativos', fmt: 'int' },
+];
+function cmpFormatar(v, fmt) {
+  if (v == null) return '—';
+  if (fmt === 'brl') return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  if (fmt === 'pct') return `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  if (fmt === 'pct0') return `≈${Math.round(v)}% do CDI`;
+  if (fmt === 'anos') return `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} anos`;
+  if (fmt === 'data') return String(v).split('-').reverse().join('/');
+  return String(v);
+}
+
+async function compararPopularSelects() {
+  const selA = document.getElementById('cmpA'); const selB = document.getElementById('cmpB'); const selC = document.getElementById('cmpC');
+  let entradas = [];
+  try { entradas = (await (await fetch('/api/historico?limit=200')).json()).entradas || []; } catch (_) { /* segue só com a carteira atual */ }
+  const comPayload = entradas.filter((e) => e.payload && Array.isArray(e.payload.ativos) && e.payload.ativos.length);
+  compararEntradas = new Map(comPayload.map((e) => [e.id, e]));
+  const opcoes = comPayload.map((e) => {
+    const dt = new Date(e.geradoEm);
+    const data = `${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const total = (e.resumo && e.resumo.viTotal != null) ? ` · ${fmtBRL(Math.round(e.resumo.viTotal))}` : '';
+    return `<option value="h:${escHtml(e.id)}">${escHtml(e.cliente)} — ${data}${total}</option>`;
+  }).join('');
+  const atual = '<option value="atual">Carteira atual (formulário)</option>';
+  selA.innerHTML = atual + opcoes;
+  selB.innerHTML = '<option value="">— escolher —</option>' + atual + opcoes;
+  selC.innerHTML = '<option value="">— nenhuma —</option>' + atual + opcoes;
+  selA.value = 'atual';
+  document.getElementById('compararInfo').textContent = entradas.length > comPayload.length
+    ? `${entradas.length - comPayload.length} simulação(ões) antigas do histórico não aparecem aqui (foram geradas antes do app guardar os dados de entrada).`
+    : '';
+}
+
+function compararMontarCenario(valor) {
+  if (valor === 'atual') {
+    const sim = coletarSimulacao();
+    const erros = validarFormulario(sim.dataBase);
+    if (erros.length) throw new Error(`Carteira atual incompleta: ${erros[0]}`);
+    return { rotulo: `Carteira atual${sim.cliente ? ` (${sim.cliente})` : ''}`, ...sim, valorTotal: sim.ativos.reduce((s, a) => s + a.vi, 0) };
+  }
+  const e = compararEntradas.get(valor.replace(/^h:/, ''));
+  if (!e) throw new Error('Simulação do histórico não encontrada.');
+  const p = e.payload;
+  const dataBase = document.getElementById('dataBase').value || p.dataBase;
+  return {
+    rotulo: `${e.cliente} (${new Date(e.geradoEm).toLocaleDateString('pt-BR')})`,
+    cliente: e.cliente, dataBase, templateType: p.templateType, assessor: p.assessor, ativos: p.ativos,
+    valorTotal: p.ativos.reduce((s, a) => s + Number(a.vi || 0), 0),
+  };
+}
+
+function compararRenderizar(r) {
+  const cen = r.cenarios;
+  const cab = `<tr><th></th>${cen.map((c) => `<th>${escHtml(c.rotulo)}</th>`).join('')}</tr>`;
+  const linhas = CMP_LINHAS.filter((l) => !l.soSeAlgum || cen.some((c) => c[l.chave] > 0)).map((l) => {
+    const venc = (r.destaques && r.destaques[l.chave]) || [];
+    return `<tr><td>${l.rotulo}</td>${cen.map((c, i) => `<td${venc.includes(i) ? ' class="venc" title="Melhor neste critério"' : ''}>${cmpFormatar(c[l.chave], l.fmt)}</td>`).join('')}</tr>`;
+  }).join('');
+  const prods = cen.map((c) => `<div><h4>${escHtml(c.rotulo)}</h4><ul>${c.produtos.map((p) =>
+    `<li><span>${escHtml(p.nome)}</span><span>${p.pctCarteira.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}% · ${p.vi.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</span></li>`).join('')}</ul></div>`).join('');
+  document.getElementById('compararResultado').innerHTML =
+    `<table class="cmp-tabela"><thead>${cab}</thead><tbody>${linhas}</tbody></table>`
+    + `<div class="atalhos-dica">Verde = melhor no critério (maior ganho, menor IR e menor duration são os "melhores"). Totais investidos diferentes deixam o ganho em R$ incomparável: olhe também o retorno % e o % do CDI.</div>`
+    + `<div class="cmp-prods">${prods}</div>`;
+}
+
+async function abrirComparar() {
+  document.getElementById('compararResultado').innerHTML = '';
+  await compararPopularSelects();
+  compararOverlay.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+function fecharComparar() { compararOverlay.hidden = true; document.body.style.overflow = ''; }
+document.getElementById('compararBtn').addEventListener('click', abrirComparar);
+document.getElementById('compararFechar').addEventListener('click', fecharComparar);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !compararOverlay.hidden) fecharComparar(); });
+document.getElementById('compararGo').addEventListener('click', async () => {
+  const valores = ['cmpA', 'cmpB', 'cmpC'].map((id) => document.getElementById(id).value).filter(Boolean);
+  const res = document.getElementById('compararResultado');
+  if (valores.length < 2) { res.innerHTML = '<div class="aviso-pdf">Escolha pelo menos duas simulações para comparar.</div>'; return; }
+  const go = document.getElementById('compararGo');
+  go.disabled = true; go.textContent = 'Calculando…';
+  try {
+    const cenarios = valores.map(compararMontarCenario);
+    const resp = await fetch('/api/comparar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cenarios }) });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.erro || 'falha ao comparar');
+    compararRenderizar(data);
+  } catch (err) {
+    res.innerHTML = `<div class="aviso-pdf">${escHtml(err.message)}</div>`;
+  } finally {
+    go.disabled = false; go.textContent = 'Comparar';
+  }
+});
+
 // --- Calculadora Financeira (avulsa, fora do fluxo de simulação de carteira) ---
 
 const CALC_MODOS = {

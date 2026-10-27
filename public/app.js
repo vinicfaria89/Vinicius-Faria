@@ -583,6 +583,12 @@ function taxaLegivel(p) {
   const t = String(p.taxa).replace('.', ',');
   return { cdi: `CDI + ${t}%`, ipca: `IPCA + ${t}%`, pctcdi: `${t}% do CDI`, fixo: `${t}% a.m.`, fixoAA: `${t}% a.a.` }[p.tipo] || t;
 }
+// Oferta com vencimento já passado: não dá mais pra investir — avisamos no seletor e no catálogo.
+function produtoVencido(p) {
+  const d = new Date();
+  const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return !!(p.vencimento && p.vencimento <= hoje);
+}
 function textoBuscaProduto(p) {
   const venc = p.vencimento ? `${p.vencimento.split('-').reverse().join('/')} ${p.vencimento.slice(0, 4)}` : '';
   return normalizarBusca(`${p.nome} ${p.categoria} ${taxaLegivel(p)} ${p.taxa} ${venc}`);
@@ -601,10 +607,12 @@ function ligarSeletorProduto(tr) {
     const todos = produtosRegistrados.map((p) => ({ p, busca: textoBuscaProduto(p) }));
     itens = (nomeAtual || !tokens.length ? todos : todos.filter((x) => tokens.every((t) => x.busca.includes(t))))
       .sort((a, b) => (normalizarBusca(a.p.nome).startsWith(tokens[0] || '\u0000') ? 0 : 1) - (normalizarBusca(b.p.nome).startsWith(tokens[0] || '\u0000') ? 0 : 1))
+      // Produtos com vencimento já passado ficam por último (não somem: o assessor pode querer revisar).
+      .sort((a, b) => produtoVencido(a.p) - produtoVencido(b.p))
       .slice(0, LIMITE).map((x) => x.p);
     ativo = 0;
     lista.innerHTML = itens.length
-      ? itens.map((p, i) => `<li role="option" data-i="${i}" aria-selected="${i === 0}"><span>${escHtml(p.nome)}</span><small>${escHtml(p.categoria)} · ${escHtml(taxaLegivel(p))}${p.vencimento ? ' · ' + p.vencimento.split('-').reverse().join('/') : ''}</small></li>`).join('')
+      ? itens.map((p, i) => `<li role="option" data-i="${i}" aria-selected="${i === 0}"${produtoVencido(p) ? ' class="cb-vencido"' : ''}><span>${escHtml(p.nome)}</span><small>${produtoVencido(p) ? 'VENCIDO · ' : ''}${escHtml(p.categoria)} · ${escHtml(taxaLegivel(p))}${p.vencimento ? ' · ' + p.vencimento.split('-').reverse().join('/') : ''}</small></li>`).join('')
       : '<li class="cb-vazio">Nenhum produto cadastrado com isso — o texto digitado vira o nome do ativo.</li>';
   };
   const abrir = () => { desenhar(); lista.hidden = false; input.setAttribute('aria-expanded', 'true'); };
@@ -644,6 +652,129 @@ function ligarSeletorProduto(tr) {
     escolher(itens[Number(li.dataset.i)]);
   });
 }
+
+// Produto do catálogo -> objeto aceito por addLinha(prefill) (usado por "Usar" e pelas carteiras-modelo).
+function produtoParaPrefill(produto) {
+  return {
+    nome: produto.nome,
+    tipoProdutoLabel: produto.categoria,
+    tipo: produto.tipo,
+    taxa: produto.taxa,
+    valorMinimo: produto.valorMinimo,
+    vencimento: produto.vencimento || '',
+    isento: produto.isento,
+    pagaCupomMensal: produto.fluxoPagamento === 'distribuido' || produto.fluxoPagamento === 'reinvestido',
+    reinvestir: produto.fluxoPagamento === 'reinvestido',
+    cashSweep: produto.cashSweep,
+    periodicidadeCupom: produto.periodicidadeCupom,
+    periodicidadeJurosCashSweep: produto.periodicidadeJurosCashSweep,
+    periodicidadeAmortizacaoCashSweep: produto.periodicidadeAmortizacaoCashSweep,
+    cronogramaPersonalizado: produto.cronogramaPersonalizado,
+    cronograma: produto.cronograma,
+    taxaEditavel: produto.taxaEditavel,
+  };
+}
+
+// ===== Carteiras-modelo: salvar a composição atual (em % do total) e reaplicar com outro valor =====
+let modelosCarteira = [];
+async function carregarModelos(selecionarId) {
+  try {
+    const resp = await fetch('/api/modelos');
+    modelosCarteira = (await resp.json()).modelos || [];
+  } catch (_) { modelosCarteira = []; }
+  const sel = document.getElementById('modeloSel');
+  sel.innerHTML = '<option value="">— escolher modelo —</option>'
+    + modelosCarteira.map((m) => `<option value="${escHtml(m.id)}">${escHtml(m.nome)} (${m.itens.length} ${m.itens.length === 1 ? 'ativo' : 'ativos'})</option>`).join('');
+  if (selecionarId) sel.value = selecionarId;
+}
+
+document.getElementById('modeloSalvar').addEventListener('click', async () => {
+  const nomeEl = document.getElementById('modeloNome');
+  const linhas = [...document.querySelectorAll('#ativosBody tr')].filter((tr) => tr.querySelector('.f-nome').value.trim());
+  if (!linhas.length) { mostrarToast('Monte a carteira antes de salvar como modelo.'); return; }
+  const nome = nomeEl.value.trim();
+  if (!nome) { marcarErro(nomeEl); nomeEl.focus(); mostrarToast('Dê um nome ao modelo.'); return; }
+  const valores = linhas.map((tr) => Number(tr.querySelector('.f-vi').value || 0));
+  const soma = valores.reduce((s, v) => s + v, 0);
+  const itens = linhas.map((tr, i) => {
+    const nomeProd = tr.querySelector('.f-nome').value.trim();
+    const produto = produtosRegistrados.find((p) => p.id === tr.dataset.produtoId)
+      || produtosRegistrados.find((p) => p.nome.trim().toLowerCase() === nomeProd.toLowerCase());
+    const fluxo = tr.querySelector('.f-fluxoPagamento').value;
+    return {
+      produtoId: produto ? produto.id : null,
+      nome: nomeProd,
+      pct: soma > 0 ? (valores[i] / soma) * 100 : 100 / linhas.length,
+      // Instantâneo pra reconstruir o ativo se o produto sair do catálogo.
+      instantaneo: {
+        nome: nomeProd,
+        tipoProdutoLabel: tr.querySelector('.f-tipoProdutoLabel').value,
+        tipo: tr.querySelector('.f-tipo').value,
+        taxa: Number(tr.querySelector('.f-taxa').value || 0),
+        vencimento: tr.querySelector('.f-vencimento').value,
+        isento: tr.querySelector('.f-isento').checked,
+        pagaCupomMensal: fluxo === 'distribuido' || fluxo === 'reinvestido',
+        reinvestir: fluxo === 'reinvestido',
+        cashSweep: tr.querySelector('.f-cashSweep').checked,
+        periodicidadeCupom: tr.querySelector('.f-periodicidade').value,
+        periodicidadeJurosCashSweep: tr.querySelector('.f-periodicidadeJurosCS').value,
+        periodicidadeAmortizacaoCashSweep: tr.querySelector('.f-periodicidadeAmortCS').value,
+      },
+    };
+  });
+  try {
+    const resp = await fetch('/api/modelos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, templateType: document.getElementById('templateType').value, itens }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.erro || 'falha ao salvar');
+    nomeEl.value = '';
+    await carregarModelos(data.modelo.id);
+    mostrarToast(`Modelo "${data.modelo.nome}" salvo.`);
+  } catch (err) {
+    mostrarToast(`Não foi possível salvar o modelo: ${err.message}`);
+  }
+});
+
+document.getElementById('modeloAplicar').addEventListener('click', async () => {
+  const modelo = modelosCarteira.find((m) => m.id === document.getElementById('modeloSel').value);
+  if (!modelo) { mostrarToast('Escolha um modelo para aplicar.'); return; }
+  const totalEl = document.getElementById('totalDividir');
+  const total = Number(parseNumeroBR(totalEl.value));
+  if (!(total > 0)) { marcarErro(totalEl); totalEl.focus(); mostrarToast('Digite o valor total do cliente no campo "Valor total (R$)" e aplique de novo.'); return; }
+  const temDados = [...document.querySelectorAll('#ativosBody tr')].some((tr) => tr.querySelector('.f-nome').value.trim() || Number(tr.querySelector('.f-vi').value));
+  if (temDados && !(await confirmarAcao('Substituir os ativos atuais da carteira pelo modelo escolhido?'))) return;
+
+  ativosBody.innerHTML = '';
+  const usados = []; const faltando = [];
+  const valores = modelo.itens.map((i) => Math.floor((total * i.pct) / 100 * 100) / 100);
+  valores[0] = Math.round((valores[0] + (total - valores.reduce((s, v) => s + v, 0))) * 100) / 100; // centavos que sobram
+  modelo.itens.forEach((item, k) => {
+    const produto = produtosRegistrados.find((p) => p.id === item.produtoId)
+      || produtosRegistrados.find((p) => p.nome.trim().toLowerCase() === item.nome.trim().toLowerCase());
+    const prefill = produto ? produtoParaPrefill(produto) : item.instantaneo;
+    if (!produto) faltando.push(item.nome);
+    const tr = addLinha({ ...prefill, vi: valores[k] });
+    if (produto) { tr.dataset.produtoId = produto.id; tr.dataset.produtoNome = produto.nome; }
+    usados.push(item.nome);
+  });
+  document.getElementById('templateType').value = modelo.templateType || 'renda';
+  atualizarTotal();
+  mostrarToast(`Modelo "${modelo.nome}" aplicado: ${fmtBRL(total)} em ${usados.length} ${usados.length === 1 ? 'ativo' : 'ativos'}`
+    + (faltando.length ? ` — fora do catálogo (dados do salvamento): ${faltando.join(', ')}` : ''));
+});
+
+document.getElementById('modeloExcluir').addEventListener('click', async () => {
+  const sel = document.getElementById('modeloSel');
+  const modelo = modelosCarteira.find((m) => m.id === sel.value);
+  if (!modelo) { mostrarToast('Escolha o modelo que deseja excluir.'); return; }
+  if (!(await confirmarAcao(`Excluir o modelo "${modelo.nome}"?`))) return;
+  await fetch(`/api/modelos/${modelo.id}`, { method: 'DELETE' });
+  await carregarModelos();
+  mostrarToast('Modelo excluído.');
+});
+carregarModelos();
 
 // ===== Avisos rápidos (toast) =====
 let toastTimer = null;
@@ -852,8 +983,29 @@ const seletorCliente = (() => {
       + item('Em custódia', brl0(c.c))
       + item('Saldo disponível', brl0(c.d))
       + item('Renda declarada', brl0(c.r))
-      + item('Último investimento', ultimo);
+      + item('Último investimento', ultimo)
+      + '<div class="cp-item cp-hist"></div>';
     perfil.hidden = false;
+    carregarSimulacoesAnteriores(c);
+  }
+
+  // "Simulações anteriores" do cliente: conta no histórico local (por nome exato) e deixa abrir a lista.
+  async function carregarSimulacoesAnteriores(c) {
+    const alvo = perfil.querySelector('.cp-hist');
+    try {
+      const resp = await fetch(`/api/historico?busca=${encodeURIComponent(c.n)}&limit=200`);
+      const entradas = ((await resp.json()).entradas || []).filter((e) => normalizar(e.cliente) === normalizar(c.n));
+      if (!perfil.contains(alvo) || !escolhido || escolhido.i !== c.i) return; // trocou de cliente enquanto carregava
+      if (!entradas.length) { alvo.innerHTML = '<span>Simulações anteriores</span>nenhuma ainda'; return; }
+      const ultima = new Date(entradas[0].geradoEm || Date.now()).toLocaleDateString('pt-BR');
+      alvo.innerHTML = `<span>Simulações anteriores</span>${entradas.length} · última em ${ultima} <button type="button" class="btn secondary small cp-ver-hist">Ver</button>`;
+      alvo.querySelector('.cp-ver-hist').addEventListener('click', () => {
+        document.getElementById('historicoBusca').value = c.n;
+        const wrap = document.getElementById('historicoWrap');
+        if (wrap.style.display === 'none') document.getElementById('toggleHistorico').click(); else carregarHistorico();
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } catch (_) { alvo.innerHTML = ''; }
   }
 
   function escolher(c) {
@@ -3057,9 +3209,9 @@ async function cpCarregarLista() {
       return;
     }
     lista.innerHTML = filtrados.map((p) => `
-      <div class="prod-item" data-id="${p.id}">
+      <div class="prod-item${produtoVencido(p) ? ' prod-vencido' : ''}" data-id="${p.id}">
         <div class="prod-info">
-          <span class="nome">${escapeHtmlCliente(p.nome)}</span><span class="cat">${escapeHtmlCliente(p.categoria)}</span>
+          <span class="nome">${escapeHtmlCliente(p.nome)}</span><span class="cat">${escapeHtmlCliente(p.categoria)}</span>${produtoVencido(p) ? '<span class="tag-vencido">vencido</span>' : ''}
           <div class="resumo">${escapeHtmlCliente(cpResumoProduto(p))}</div>
         </div>
         <div class="prod-actions">
@@ -3086,24 +3238,7 @@ document.getElementById('catalogoLista').addEventListener('click', async (e) => 
     [...document.querySelectorAll('#ativosBody tr')].forEach((r) => {
       if (!r.querySelector('.f-nome').value.trim() && !Number(r.querySelector('.f-vi').value)) r.remove();
     });
-    const novaLinha = addLinha({
-      nome: produto.nome,
-      tipoProdutoLabel: produto.categoria,
-      tipo: produto.tipo,
-      taxa: produto.taxa,
-      valorMinimo: produto.valorMinimo,
-      vencimento: produto.vencimento || '',
-      isento: produto.isento,
-      pagaCupomMensal: produto.fluxoPagamento === 'distribuido' || produto.fluxoPagamento === 'reinvestido',
-      reinvestir: produto.fluxoPagamento === 'reinvestido',
-      cashSweep: produto.cashSweep,
-      periodicidadeCupom: produto.periodicidadeCupom,
-      periodicidadeJurosCashSweep: produto.periodicidadeJurosCashSweep,
-      periodicidadeAmortizacaoCashSweep: produto.periodicidadeAmortizacaoCashSweep,
-      cronogramaPersonalizado: produto.cronogramaPersonalizado,
-      cronograma: produto.cronograma,
-      taxaEditavel: produto.taxaEditavel,
-    });
+    const novaLinha = addLinha(produtoParaPrefill(produto));
     novaLinha.dataset.produtoId = produto.id;
     novaLinha.dataset.produtoNome = produto.nome;
     novaLinha.classList.add('linha-nova');

@@ -10,6 +10,7 @@ const { gerarPdfDeHtml, medirAlturasCards, encerrarBrowser } = require('./lib/pd
 const { parseDataLocal, dataDDMMAAAA } = require('./lib/format');
 const historico = require('./lib/historico');
 const clientesBase = require('./lib/clientes');
+const modelosCarteira = require('./lib/modelos');
 const produtosCatalogo = require('./lib/produtos');
 const calculadora = require('./lib/calculadoraFinanceira');
 const { calcularNovacao } = require('./lib/novacao');
@@ -341,6 +342,28 @@ app.post('/api/produtos/lote', (req, res) => {
   if (!lista.length) return res.status(400).json({ erro: 'Nenhum produto para importar.' });
   const resultado = produtosCatalogo.importarProdutos(lista);
   res.json(resultado);
+});
+
+// Carteiras-modelo (composições reaproveitáveis em % do total) — ver lib/modelos.js.
+app.get('/api/modelos', (req, res) => {
+  res.json({ modelos: modelosCarteira.listarModelos() });
+});
+
+app.post('/api/modelos', (req, res) => {
+  try {
+    res.json({ modelo: modelosCarteira.salvarModelo(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ erro: err.message });
+  }
+});
+
+app.delete('/api/modelos/:id', (req, res) => {
+  try {
+    modelosCarteira.removerModelo(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(404).json({ erro: err.message });
+  }
 });
 
 app.delete('/api/produtos/:id', (req, res) => {

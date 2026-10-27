@@ -106,6 +106,15 @@
   .cb-produtos { min-width:400px; }
   .cb-wrap.cb-sem-seta input { padding-right:8px; }
   .atalhos-dica { font-size:10.5px; color:#8a886f; margin-top:8px; }
+  .cb-lista li.cb-vencido { opacity:0.55; }
+  .prod-item.prod-vencido { background:#f7f4ee; }
+  .prod-item.prod-vencido .nome { color:#8a886f; }
+  .tag-vencido { margin-left:6px; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#8a4a4a; background:#f3e3e3; padding:1px 6px; border-radius:999px; }
+  .modelos-linha { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:14px; padding-top:12px; border-top:1px dashed #DCD8D5; }
+  .modelos-linha label { margin:0; }
+  .modelos-linha select { width:auto; min-width:220px; }
+  .modelos-linha input[type=text] { width:200px; }
+  .modelos-sep { width:1px; height:22px; background:#DCD8D5; margin:0 4px; }
   .btn { background:#312F14; color:#fff; border:none; border-radius:6px; padding:9px 16px; font-size:12.5px; font-weight:700; cursor:pointer; }
   .btn:hover { background:#3a3a24; }
   .btn.secondary { background:#efece2; color:#1f1f14; }
@@ -997,6 +1006,15 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
         <button class="btn secondary small" id="dividirIgual" type="button" title="Divide o valor igualmente entre todos os ativos da carteira">Dividir igualmente</button>
       </div>
     </div>
+    <div class="modelos-linha">
+      <label for="modeloSel">Carteira-modelo</label>
+      <select id="modeloSel"><option value="">— escolher modelo —</option></select>
+      <button class="btn secondary small" id="modeloAplicar" type="button" title="Monta a carteira com os produtos do modelo, distribuindo o valor do campo 'Valor total (R$)'">Aplicar</button>
+      <button class="btn secondary small" id="modeloExcluir" type="button">Excluir</button>
+      <span class="modelos-sep"></span>
+      <input type="text" id="modeloNome" placeholder="Nome do novo modelo" aria-label="Nome do novo modelo">
+      <button class="btn secondary small" id="modeloSalvar" type="button" title="Guarda os produtos desta carteira e a proporção de cada um">Salvar carteira atual como modelo</button>
+    </div>
     <div class="atalhos-dica">Atalhos: <b>Ctrl+K</b> buscar produto · <b>Ctrl+Enter</b> gerar PDF · <b>Esc</b> fechar painéis</div>
   </div>
 
@@ -1112,6 +1130,6 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
   </tr>
 </template>
 
-<script src="app.js?v=2026102803"></script>
+<script src="app.js?v=2026102805"></script>
 </body>
 </html>

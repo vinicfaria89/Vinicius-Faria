@@ -3155,8 +3155,59 @@ document.getElementById('cp-categoria').addEventListener('change', cpAtualizarIs
 document.getElementById('cp-cashSweep').addEventListener('change', cpAtualizarModoCashSweep);
 cpAtualizarIsentoAutomatico();
 
+// ===== Cadastro a partir da lâmina em PDF (leitura assistida — ver lib/leitorLamina.js) =====
+let cpCronogramaImportado = null; // { cronograma } lido do PDF, anexado ao produto ao salvar
+
+function cpMostrarAvisosPdf(avisos, cronograma) {
+  const box = document.getElementById('cp-pdf-avisos');
+  const itens = [];
+  if (cronograma) {
+    const br = (iso) => iso.split('-').reverse().join('/');
+    itens.push(`<div class="aviso-pdf ok">Cronograma lido da tabela do PDF: <b>${cronograma.length} parcelas</b> (${br(cronograma[0].data)} → ${br(cronograma[cronograma.length - 1].data)}). Será salvo como <b>fluxo fixo e travado</b>. Confira se o nº de parcelas bate com o material.</div>`);
+  }
+  (avisos || []).forEach((a) => itens.push(`<div class="aviso-pdf">${escapeHtmlCliente(a)}</div>`));
+  box.innerHTML = itens.join('');
+}
+
+document.getElementById('cp-pdf').addEventListener('change', async (e) => {
+  const arquivo = e.target.files[0];
+  const status = document.getElementById('cp-pdf-status');
+  if (!arquivo) return;
+  status.textContent = `Lendo "${arquivo.name}"…`;
+  try {
+    const resp = await fetch('/api/produtos/ler-lamina', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf', 'X-Nome-Arquivo': encodeURIComponent(arquivo.name) },
+      body: await arquivo.arrayBuffer(),
+    });
+    const r = await resp.json();
+    if (!resp.ok) throw new Error(r.erro || 'falha na leitura');
+    const c = r.campos;
+    document.getElementById('cp-id').value = '';
+    if (c.categoria) document.getElementById('cp-categoria').value = c.categoria;
+    document.getElementById('cp-nome').value = r.nomeSugerido || '';
+    if (c.tipo) document.getElementById('cp-tipo').value = c.tipo;
+    document.getElementById('cp-taxa').value = c.taxa ?? '';
+    document.getElementById('cp-valorMinimo').value = c.valorMinimo ?? '';
+    document.getElementById('cp-vencimento').value = c.vencimento || '';
+    document.getElementById('cp-isento').checked = !!c.isento;
+    document.getElementById('cp-fluxoPagamento').value = c.fluxoPagamento || 'bullet';
+    document.getElementById('cp-cashSweep').checked = !!c.cashSweep;
+    document.getElementById('cp-periodicidade').value = c.periodicidadeCupom || 'mensal';
+    cpAtualizarIsentoAutomatico();
+    cpAtualizarModoCashSweep();
+    cpCronogramaImportado = c.cronogramaPersonalizado && c.cronograma ? { cronograma: c.cronograma } : null;
+    cpMostrarAvisosPdf(r.avisos, c.cronograma);
+    status.textContent = `Lido: ${arquivo.name}. Revise os campos abaixo (principalmente o nome) e clique em Salvar Produto.${r.viaPoppler ? '' : ' (leitura simplificada)'}`;
+  } catch (err) {
+    status.textContent = `Não foi possível ler o PDF: ${err.message}`;
+  }
+});
+
 function cpLimparFormulario() {
   document.getElementById('cp-id').value = '';
+  cpCronogramaImportado = null;
+  document.getElementById('cp-pdf-avisos').innerHTML = '';
   document.getElementById('catalogoForm').reset();
   cpAtualizarIsentoAutomatico();
   cpAtualizarModoCashSweep();
@@ -3246,6 +3297,8 @@ document.getElementById('catalogoLista').addEventListener('click', async (e) => 
     const qtd = document.querySelectorAll('#ativosBody tr').length;
     mostrarToast(`${produto.nome} adicionado à carteira (${qtd} ${qtd === 1 ? 'ativo' : 'ativos'})`);
   } else if (e.target.classList.contains('cp-editar')) {
+    cpCronogramaImportado = null; // editar um produto existente não reaproveita leitura de PDF anterior
+    document.getElementById('cp-pdf-avisos').innerHTML = '';
     document.getElementById('cp-id').value = produto.id;
     document.getElementById('cp-categoria').value = produto.categoria;
     document.getElementById('cp-nome').value = produto.nome;
@@ -3299,6 +3352,14 @@ document.getElementById('catalogoForm').addEventListener('submit', async (e) => 
     periodicidadeJurosCashSweep: document.getElementById('cp-periodicidadeJurosCS').value,
     periodicidadeAmortizacaoCashSweep: document.getElementById('cp-periodicidadeAmortCS').value,
   };
+  if (cpCronogramaImportado) {
+    // Fluxo fixo lido da tabela do PDF (percentuais sobre o saldo remanescente, ver calculo.js).
+    payload.cronogramaPersonalizado = true;
+    payload.cronograma = cpCronogramaImportado.cronograma;
+    payload.fluxoPagamento = 'distribuido';
+    payload.cashSweep = false;
+    payload.vencimento = cpCronogramaImportado.cronograma[cpCronogramaImportado.cronograma.length - 1].data;
+  }
 
   await fetch('/api/produtos', {
     method: 'POST',

@@ -11,6 +11,7 @@ const { parseDataLocal, dataDDMMAAAA } = require('./lib/format');
 const historico = require('./lib/historico');
 const clientesBase = require('./lib/clientes');
 const modelosCarteira = require('./lib/modelos');
+const { lerLaminaPdf, recortarPdf } = require('./lib/leitorLamina');
 const produtosCatalogo = require('./lib/produtos');
 const calculadora = require('./lib/calculadoraFinanceira');
 const { calcularNovacao } = require('./lib/novacao');
@@ -342,6 +343,21 @@ app.post('/api/produtos/lote', (req, res) => {
   if (!lista.length) return res.status(400).json({ erro: 'Nenhum produto para importar.' });
   const resultado = produtosCatalogo.importarProdutos(lista);
   res.json(resultado);
+});
+
+// Leitura assistida de uma lâmina em PDF (pré-preenche o cadastro de produto; nada é salvo aqui) —
+// ver lib/leitorLamina.js. O PDF vem como corpo binário; o nome do arquivo no cabeçalho X-Nome-Arquivo.
+app.post('/api/produtos/ler-lamina', express.raw({ type: ['application/pdf', 'application/octet-stream'], limit: '25mb' }), async (req, res) => {
+  try {
+    if (!Buffer.isBuffer(req.body) || req.body.length < 100 || !recortarPdf(req.body)) {
+      return res.status(400).json({ erro: 'Envie um arquivo PDF.' });
+    }
+    const arquivo = decodeURIComponent(req.get('X-Nome-Arquivo') || '');
+    res.json(await lerLaminaPdf(req.body, arquivo));
+  } catch (err) {
+    console.error('[ler-lamina]', err);
+    res.status(422).json({ erro: `Não consegui ler esse PDF: ${err.message}` });
+  }
 });
 
 // Carteiras-modelo (composições reaproveitáveis em % do total) — ver lib/modelos.js.

@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GCB Simulador — Carteira Simulada</title>
 <style>
   @font-face {
@@ -80,10 +81,31 @@
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
   .grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; }
-  table#ativosTable { width:100%; border-collapse:collapse; font-size:11.5px; margin-top:10px; }
-  table#ativosTable th { text-align:left; font-size:10px; color:#5a5847; padding:4px 6px; border-bottom:1px solid #DCD8D5; }
+  table#ativosTable { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
+  table#ativosTable th { text-align:left; font-size:11px; color:#5a5847; padding:4px 6px; border-bottom:1px solid #DCD8D5; }
   table#ativosTable td { padding:4px 6px; vertical-align:top; }
-  table#ativosTable td input, table#ativosTable td select { font-size:11px; padding:5px 6px; }
+  table#ativosTable td input, table#ativosTable td select { font-size:12px; padding:6px 6px; }
+  /* Linha recém-adicionada pelo catálogo: pisca em verde pra confirmar que entrou na carteira */
+  @keyframes linhaNova { from { background:#cfe6b4; } to { background:transparent; } }
+  #ativosBody tr.linha-nova { animation:linhaNova 2.2s ease-out; }
+  /* Gaveta de Produtos: abre ao lado da carteira em vez de empurrar a página pra baixo */
+  #catalogoCard { position:fixed; top:0; right:0; bottom:0; z-index:50; width:min(720px, 96vw); margin:0; overflow-y:auto; border-radius:14px 0 0 14px; box-shadow:-14px 0 36px rgba(0,0,0,0.22); }
+  /* Aviso rápido ("Favaretto adicionado à carteira") */
+  .toast { position:fixed; left:50%; bottom:78px; transform:translateX(-50%); z-index:70; background:#20300f; color:#e9f3dc; padding:10px 18px; border-radius:999px; font-size:12.5px; font-weight:600; box-shadow:0 8px 24px rgba(0,0,0,0.25); max-width:90vw; }
+  /* Barra de resumo fixa: total, nº de ativos e Gerar PDF sempre à mão */
+  .barra-resumo { position:fixed; left:0; right:0; bottom:0; z-index:40; background:#312F14; color:#f3f1e6; padding:10px 20px; display:flex; align-items:center; justify-content:center; gap:22px; flex-wrap:wrap; font-size:12.5px; box-shadow:0 -6px 20px rgba(0,0,0,0.18); }
+  .barra-resumo[hidden] { display:none; }
+  .barra-resumo b { color:#fff; font-size:14px; }
+  .barra-resumo .btn { background:#A8D18B; color:#1f2a10; }
+  .barra-resumo .btn:hover { background:#bfe0a5; }
+  .barra-resumo small { color:#bdb99f; }
+  main { padding-bottom:84px; }
+  .dividir-total { display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .dividir-total input { width:150px; }
+  /* Seletor de produto dentro da linha (dropdown mais largo que a coluna) */
+  .cb-produtos { min-width:400px; }
+  .cb-wrap.cb-sem-seta input { padding-right:8px; }
+  .atalhos-dica { font-size:10.5px; color:#8a886f; margin-top:8px; }
   .btn { background:#312F14; color:#fff; border:none; border-radius:6px; padding:9px 16px; font-size:12.5px; font-weight:700; cursor:pointer; }
   .btn:hover { background:#3a3a24; }
   .btn.secondary { background:#efece2; color:#1f1f14; }
@@ -969,8 +991,13 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
     </table>
     <div class="row-actions">
       <button class="btn secondary small" id="addAtivo">+ adicionar ativo</button>
-      <span style="font-size:11px; color:#5a5847; align-self:center;">Total investido: <b id="totalInvestido">R$ 0</b></span>
+      <span style="font-size:12px; color:#5a5847; align-self:center;">Total investido: <b id="totalInvestido">R$ 0</b></span>
+      <div class="dividir-total">
+        <input type="text" id="totalDividir" class="valor-brl" inputmode="decimal" placeholder="Valor total (R$)" aria-label="Valor total a dividir entre os ativos">
+        <button class="btn secondary small" id="dividirIgual" type="button" title="Divide o valor igualmente entre todos os ativos da carteira">Dividir igualmente</button>
+      </div>
     </div>
+    <div class="atalhos-dica">Atalhos: <b>Ctrl+K</b> buscar produto · <b>Ctrl+Enter</b> gerar PDF · <b>Esc</b> fechar painéis</div>
   </div>
 
   <div class="row-actions">
@@ -997,6 +1024,14 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
 
 </main>
 
+<div class="barra-resumo" id="barraResumo" hidden>
+  <span><b id="brQtd">0</b> <span id="brQtdTxt">ativos</span></span>
+  <span>Total investido <b id="brTotal">R$ 0</b></span>
+  <span>Vencimento mais longo <b id="brVenc">—</b></span>
+  <button class="btn" id="gerarBtnBarra" type="button">Gerar PDF</button>
+  <small>Ctrl+Enter</small>
+</div>
+
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-box">
     <p id="confirmMensagem"></p>
@@ -1021,8 +1056,9 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
         <option>Recebível Judicial</option>
       </select>
     </td>
-    <td>
-      <input type="text" class="f-nome" list="" placeholder="ex.: Debênture 3 Anos" autocomplete="off">
+    <td class="cb-wrap cb-sem-seta">
+      <input type="text" class="f-nome" placeholder="Buscar produto…" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Produto">
+      <ul class="cb-lista cb-produtos" role="listbox" hidden></ul>
       <datalist class="f-produtos-datalist"></datalist>
       <div class="f-cronograma-aviso" style="display:none;">🔒 Fluxo próprio cadastrado — dados fixos</div>
     </td>
@@ -1076,6 +1112,6 @@ Debênture Agosto 2028	8300	31/08/2028	7000	15/01/2024"></textarea>
   </tr>
 </template>
 
-<script src="app.js?v=2026102802"></script>
+<script src="app.js?v=2026102803"></script>
 </body>
 </html>

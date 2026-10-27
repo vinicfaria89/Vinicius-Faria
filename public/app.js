@@ -492,15 +492,9 @@ function addLinha(prefill) {
   // sugestão (some tudo mais). Pra sempre listar todas as opções do catálogo, limpamos o campo ao
   // focar (mostrando a lista cheia) e restauramos o valor anterior se o usuário sair sem escolher nada.
   const nomeInput = tr.querySelector('.f-nome');
-  nomeInput.addEventListener('focus', () => {
-    nomeInput.dataset.valorAnterior = nomeInput.value;
-    nomeInput.value = '';
-  });
-  nomeInput.addEventListener('blur', () => {
-    if (nomeInput.value.trim() === '' && nomeInput.dataset.valorAnterior) {
-      nomeInput.value = nomeInput.dataset.valorAnterior;
-    }
-  });
+  // (O datalist nativo foi trocado por um seletor próprio — ver ligarSeletorProduto — que busca por
+  // nome, categoria, taxa e vencimento e mostra o produto completo; o foco só seleciona o texto.)
+  nomeInput.addEventListener('focus', () => nomeInput.select());
   // Se o nome digitado/escolhido bate com um produto cadastrado no catálogo, preenche o resto da
   // linha sozinho — é o principal ganho de ter cadastrado o produto antes. Escuta tanto `input`
   // quanto `change`: escolher uma sugestão do <datalist> nativo dispara `input` de forma confiável
@@ -509,8 +503,15 @@ function addLinha(prefill) {
   // aparecer depois de clicar fora do campo, ou nem aparecer, dependendo de como o texto foi
   // preenchido. Rodar em ambos é seguro: a função é idempotente (mesmo nome → mesmo resultado).
   const handleNomeInput = () => {
+    // Produto escolhido pelo seletor (por id): mantém enquanto o nome não for editado — evita cair
+    // no primeiro homônimo (ex.: dois "Souza Prado" com taxas diferentes).
+    if (tr.dataset.produtoId) {
+      if (nomeInput.value === tr.dataset.produtoNome) return;
+      delete tr.dataset.produtoId;
+      delete tr.dataset.produtoNome;
+    }
     const produto = buscarProdutoCadastradoPorNome(nomeInput.value);
-    if (produto) preencherLinhaComProduto(tr, produto);
+    if (produto) { preencherLinhaComProduto(tr, produto); atualizarTotal(); }
     else {
       aplicarValorMinimo(tr, null);
       delete tr.dataset.cronogramaPersonalizado;
@@ -530,10 +531,8 @@ function addLinha(prefill) {
   // Cada linha precisa de um <datalist> com id próprio (não pode ser compartilhado entre linhas com
   // categorias diferentes selecionadas ao mesmo tempo).
   contadorLinhas++;
-  const dlId = `produtos-dl-${contadorLinhas}`;
-  const datalist = tr.querySelector('.f-produtos-datalist');
-  datalist.id = dlId;
-  tr.querySelector('.f-nome').setAttribute('list', dlId);
+  tr.querySelector('.f-vencimento').addEventListener('change', atualizarTotal);
+  ligarSeletorProduto(tr);
 
   ativosBody.appendChild(frag);
   atualizarIsentoAutomatico(tr);
@@ -549,15 +548,137 @@ function addLinha(prefill) {
   }
   aplicarBloqueioCronograma(tr, !!(prefill && prefill.cronogramaPersonalizado), !!(prefill && prefill.taxaEditavel));
   atualizarTotal();
+  return tr;
 }
 
 function atualizarTotal() {
   let total = 0;
-  document.querySelectorAll('#ativosBody tr').forEach((tr) => {
+  let maisLongo = '';
+  const linhas = [...document.querySelectorAll('#ativosBody tr')];
+  linhas.forEach((tr) => {
     total += Number(tr.querySelector('.f-vi').value || 0);
+    const v = tr.querySelector('.f-vencimento').value;
+    if (v && v > maisLongo) maisLongo = v;
   });
   totalInvestidoEl.textContent = fmtBRL(total);
+  // Barra de resumo fixa (rodapé): só aparece quando há ativos na carteira.
+  const barra = document.getElementById('barraResumo');
+  barra.hidden = linhas.length === 0;
+  document.getElementById('brQtd').textContent = linhas.length;
+  document.getElementById('brQtdTxt').textContent = linhas.length === 1 ? 'ativo' : 'ativos';
+  document.getElementById('brTotal').textContent = fmtBRL(total);
+  document.getElementById('brVenc').textContent = maisLongo ? maisLongo.split('-').reverse().join('/') : '—';
 }
+
+// ===== Seletor de produto da linha (substitui o datalist nativo) =====
+// Busca em TODO o catálogo (qualquer categoria) por nome, categoria, taxa e vencimento — "cri 2029",
+// "cdi+5", "zamb" — e escolhe pelo ID do produto, então homônimos com taxas diferentes não se confundem.
+function normalizarBusca(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function taxaLegivel(p) {
+  const t = String(p.taxa).replace('.', ',');
+  return { cdi: `CDI + ${t}%`, ipca: `IPCA + ${t}%`, pctcdi: `${t}% do CDI`, fixo: `${t}% a.m.`, fixoAA: `${t}% a.a.` }[p.tipo] || t;
+}
+function textoBuscaProduto(p) {
+  const venc = p.vencimento ? `${p.vencimento.split('-').reverse().join('/')} ${p.vencimento.slice(0, 4)}` : '';
+  return normalizarBusca(`${p.nome} ${p.categoria} ${taxaLegivel(p)} ${p.taxa} ${venc}`);
+}
+
+function ligarSeletorProduto(tr) {
+  const input = tr.querySelector('.f-nome');
+  const lista = tr.querySelector('.cb-produtos');
+  const LIMITE = 40;
+  let itens = [];
+  let ativo = 0;
+
+  const desenhar = () => {
+    const tokens = normalizarBusca(input.value).split(/\s+/).filter(Boolean);
+    const nomeAtual = input.value === tr.dataset.produtoNome; // acabou de escolher: mostra tudo de novo
+    const todos = produtosRegistrados.map((p) => ({ p, busca: textoBuscaProduto(p) }));
+    itens = (nomeAtual || !tokens.length ? todos : todos.filter((x) => tokens.every((t) => x.busca.includes(t))))
+      .sort((a, b) => (normalizarBusca(a.p.nome).startsWith(tokens[0] || '\u0000') ? 0 : 1) - (normalizarBusca(b.p.nome).startsWith(tokens[0] || '\u0000') ? 0 : 1))
+      .slice(0, LIMITE).map((x) => x.p);
+    ativo = 0;
+    lista.innerHTML = itens.length
+      ? itens.map((p, i) => `<li role="option" data-i="${i}" aria-selected="${i === 0}"><span>${escHtml(p.nome)}</span><small>${escHtml(p.categoria)} · ${escHtml(taxaLegivel(p))}${p.vencimento ? ' · ' + p.vencimento.split('-').reverse().join('/') : ''}</small></li>`).join('')
+      : '<li class="cb-vazio">Nenhum produto cadastrado com isso — o texto digitado vira o nome do ativo.</li>';
+  };
+  const abrir = () => { desenhar(); lista.hidden = false; input.setAttribute('aria-expanded', 'true'); };
+  const fechar = () => { lista.hidden = true; input.setAttribute('aria-expanded', 'false'); };
+  const marcar = (n) => {
+    const lis = lista.querySelectorAll('li[role=option]');
+    if (!lis.length) return;
+    ativo = (n + lis.length) % lis.length;
+    lis.forEach((li, i) => li.setAttribute('aria-selected', String(i === ativo)));
+    lis[ativo].scrollIntoView({ block: 'nearest' });
+  };
+  const escolher = (p) => {
+    input.value = p.nome;
+    tr.dataset.produtoId = p.id;
+    tr.dataset.produtoNome = p.nome;
+    preencherLinhaComProduto(tr, p);
+    atualizarTotal();
+    fechar();
+    input.classList.remove('campo-erro');
+    const vi = tr.querySelector('.f-vi');
+    if (vi && !vi.value) vi.focus();
+  };
+
+  input.addEventListener('focus', abrir);
+  input.addEventListener('input', abrir);
+  input.addEventListener('blur', () => setTimeout(fechar, 120));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (lista.hidden) abrir(); else marcar(ativo + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); marcar(ativo - 1); }
+    else if (e.key === 'Enter' && !lista.hidden && itens[ativo]) { e.preventDefault(); escolher(itens[ativo]); }
+    else if (e.key === 'Escape') fechar();
+  });
+  lista.addEventListener('mousedown', (e) => {
+    const li = e.target.closest('li[role=option]');
+    if (!li) return;
+    e.preventDefault();
+    escolher(itens[Number(li.dataset.i)]);
+  });
+}
+
+// ===== Avisos rápidos (toast) =====
+let toastTimer = null;
+function mostrarToast(mensagem) {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  el.textContent = mensagem;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 2800);
+}
+
+// ===== Dividir o valor total igualmente entre os ativos =====
+document.getElementById('dividirIgual').addEventListener('click', () => {
+  const linhas = [...document.querySelectorAll('#ativosBody tr')];
+  const totalEl = document.getElementById('totalDividir');
+  const total = Number(parseNumeroBR(totalEl.value));
+  if (!linhas.length) { mostrarToast('Adicione os ativos antes de dividir o valor.'); return; }
+  if (!(total > 0)) { marcarErro(totalEl); totalEl.focus(); mostrarToast('Digite o valor total a dividir.'); return; }
+  const parte = Math.floor((total / linhas.length) * 100) / 100;
+  let resto = Math.round((total - parte * linhas.length) * 100) / 100; // centavos que sobram vão pro 1º ativo
+  linhas.forEach((tr, i) => {
+    const vi = tr.querySelector('.f-vi');
+    vi.value = String(i === 0 ? Math.round((parte + resto) * 100) / 100 : parte);
+    vi.classList.remove('campo-erro');
+  });
+  atualizarTotal();
+  mostrarToast(`${fmtBRL(total)} divididos entre ${linhas.length} ${linhas.length === 1 ? 'ativo' : 'ativos'}.`);
+});
 
 document.getElementById('addAtivo').addEventListener('click', () => addLinha());
 
@@ -910,6 +1031,9 @@ document.getElementById('gerarBtn').addEventListener('click', async () => {
     resultadoEl.className = 'erro';
     resultadoEl.style.display = 'block';
     resultadoEl.textContent = errosValidacao.join(' ');
+    // Leva o olhar pro primeiro campo com problema (antes o erro só aparecia lá embaixo, longe do campo).
+    const primeiroErro = document.querySelector('.campo-erro');
+    if (primeiroErro) { primeiroErro.scrollIntoView({ block: 'center', behavior: 'smooth' }); primeiroErro.focus(); }
     return;
   }
 
@@ -2891,7 +3015,7 @@ function cpLimparFormulario() {
 function cpResumoProduto(p) {
   const indexadorLabel = { fixo: 'Prefixado (a.m.)', fixoAA: 'Prefixado (a.a.)', cdi: 'CDI +', ipca: 'IPCA +', pctcdi: '% CDI' }[p.tipo] || p.tipo;
   const fluxoLabel = { bullet: 'Bullet', distribuido: 'Distribuído', reinvestido: 'Reinvestido' }[p.fluxoPagamento] || p.fluxoPagamento;
-  const partes = [`${indexadorLabel} ${p.taxa}`, p.cashSweep ? 'Cash Sweep' : fluxoLabel, p.isento ? 'isento' : 'tributado'];
+  const partes = [`${indexadorLabel} ${String(p.taxa).replace('.', ',')}`, p.cashSweep ? 'Cash Sweep' : fluxoLabel, p.isento ? 'isento' : 'tributado'];
   if (p.valorMinimo) partes.push(`mín. ${fmtBRL(Number(p.valorMinimo))}`);
   if (p.vencimento) partes.push(`vence ${p.vencimento.split('-').reverse().join('/')}`);
   return partes.join(' · ');
@@ -2957,7 +3081,12 @@ document.getElementById('catalogoLista').addEventListener('click', async (e) => 
   if (!produto) return;
 
   if (e.target.classList.contains('cp-usar')) {
-    addLinha({
+    // Linhas totalmente em branco (sem produto e sem valor) saem do caminho — senão sobra uma linha
+    // vazia no topo toda vez que o assessor começa a carteira pelo catálogo.
+    [...document.querySelectorAll('#ativosBody tr')].forEach((r) => {
+      if (!r.querySelector('.f-nome').value.trim() && !Number(r.querySelector('.f-vi').value)) r.remove();
+    });
+    const novaLinha = addLinha({
       nome: produto.nome,
       tipoProdutoLabel: produto.categoria,
       tipo: produto.tipo,
@@ -2975,6 +3104,12 @@ document.getElementById('catalogoLista').addEventListener('click', async (e) => 
       cronograma: produto.cronograma,
       taxaEditavel: produto.taxaEditavel,
     });
+    novaLinha.dataset.produtoId = produto.id;
+    novaLinha.dataset.produtoNome = produto.nome;
+    novaLinha.classList.add('linha-nova');
+    setTimeout(() => novaLinha.classList.remove('linha-nova'), 2400);
+    const qtd = document.querySelectorAll('#ativosBody tr').length;
+    mostrarToast(`${produto.nome} adicionado à carteira (${qtd} ${qtd === 1 ? 'ativo' : 'ativos'})`);
   } else if (e.target.classList.contains('cp-editar')) {
     document.getElementById('cp-id').value = produto.id;
     document.getElementById('cp-categoria').value = produto.categoria;
@@ -3288,9 +3423,37 @@ document.getElementById('toggleCatalogo').addEventListener('click', () => {
   if (abrindo) {
     document.querySelector('[data-catalogo-tab="catalogo"]').click();
     cpCarregarLista();
-    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    card.scrollTop = 0; // gaveta lateral (position:fixed) — não precisa rolar a página
   }
   nvAtualizarBotaoAtivoHeader();
+});
+
+// ===== Atalhos de teclado =====
+// Ctrl+K: vai direto pra busca de produto (cria uma linha se a carteira estiver vazia ou a última já
+// tiver produto). Ctrl+Enter: gera o PDF. Esc: fecha a gaveta de Produtos.
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    let linhas = [...document.querySelectorAll('#ativosBody tr')];
+    let alvo = linhas.length ? linhas[linhas.length - 1] : null;
+    if (!alvo || alvo.querySelector('.f-nome').value.trim()) alvo = addLinha();
+    alvo.querySelector('.f-nome').focus();
+    alvo.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    const btn = document.getElementById('gerarBtn');
+    if (!btn.disabled) btn.click();
+  } else if (e.key === 'Escape') {
+    const card = document.getElementById('catalogoCard');
+    if (card.style.display !== 'none' && !document.querySelector('.cb-lista:not([hidden])')) {
+      card.style.display = 'none';
+      nvAtualizarBotaoAtivoHeader();
+    }
+  }
+});
+document.getElementById('gerarBtnBarra').addEventListener('click', () => {
+  const btn = document.getElementById('gerarBtn');
+  if (!btn.disabled) btn.click();
 });
 document.getElementById('fecharCatalogo').addEventListener('click', () => {
   document.getElementById('catalogoCard').style.display = 'none';

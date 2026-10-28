@@ -13,6 +13,7 @@ const clientesBase = require('./lib/clientes');
 const modelosCarteira = require('./lib/modelos');
 const { lerLaminaPdf, recortarPdf } = require('./lib/leitorLamina');
 const { calcularCarteira } = require('./lib/calculo');
+const { normalizarCorpo } = require('./lib/integracao');
 const { resumirCarteira, destaques: destaquesComparacao } = require('./lib/comparacao');
 const produtosCatalogo = require('./lib/produtos');
 const calculadora = require('./lib/calculadoraFinanceira');
@@ -260,6 +261,23 @@ async function prepararRelatorio(body) {
   return { ...base, html, carteira };
 }
 
+// ---- Integração com outros sistemas (ex.: Planejador Financeiro GCB) — ver lib/integracao.js ----
+// Corpo mínimo: { cliente, itens: [{ produtoId | nome, vi, taxa? }], dataBase?, templateType?, assessor? }.
+// /api/simular devolve só o resumo comparável (JSON); /api/preview devolve o HTML do relatório.
+app.post('/api/simular', async (req, res) => {
+  try {
+    const corpo = normalizarCorpo(req.body, produtosCatalogo.listarProdutos());
+    if (!corpo.cliente) corpo.cliente = 'Simulação';
+    const base = await prepararCarteira(corpo);
+    const carteira = calcularCarteira(base.ativosInput.map((a) => ({ ...a, dataBase: base.dataBaseObj })), base.curvas);
+    res.json({ resumo: resumirCarteira(carteira, corpo.cliente), dataBase: corpo.dataBase });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ erro: err.message });
+    console.error('[simular] falha:', err);
+    res.status(500).json({ erro: mensagemAmigavel(err) });
+  }
+});
+
 // Comparação de simulações: recebe até 3 cenários ({ rotulo, ...corpo do /api/gerar }) e devolve um resumo
 // comparável de cada um, calculado com as mesmas curvas de mercado (ver lib/comparacao.js).
 app.post('/api/comparar', async (req, res) => {
@@ -291,7 +309,7 @@ app.post('/api/comparar', async (req, res) => {
 // Pré-visualização: mesmo relatório do PDF, só que como HTML (sem gerar arquivo nem gravar histórico).
 app.post('/api/preview', async (req, res) => {
   try {
-    const { html } = await prepararRelatorio(req.body || {});
+    const { html } = await prepararRelatorio(normalizarCorpo(req.body, produtosCatalogo.listarProdutos()));
     res.json({ html });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ erro: err.message });

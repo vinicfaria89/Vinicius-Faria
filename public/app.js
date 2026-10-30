@@ -1567,7 +1567,6 @@ const CALC_DISCLAIMER_TEXTO = 'Considera taxas e curvas de mercado do dia desta 
 // equivalente; uma conta que desconta a alíquota direto na taxa mensal e depois compõe (comum em
 // material de divulgação) sub-representa o retorno real, porque tributa o crescimento composto
 // repetidamente em vez de uma única vez no fim.
-const CALC_NOTA_IR_METODOLOGIA_TEXTO = 'A taxa líquida é calculada aplicando o IR uma única vez sobre o ganho total do período (Lei nº 11.033/2004 — produtos sem pagamento periódico só têm retenção no resgate) e "desfazendo" o valor líquido numa taxa anual/mensal equivalente. Pode diferir de uma conta rápida que desconta a alíquota direto na taxa mensal e depois compõe — essa forma, comum em material de divulgação, sub-representa o retorno real ao tributar o crescimento composto repetidamente em vez de uma única vez no resgate.';
 
 function calcDisclaimerHtml() {
   return `<p style="font-size:9.5px; color:#8a886f; margin-top:10px; font-style:italic;">⚠️ ${CALC_DISCLAIMER_TEXTO}</p>`;
@@ -1613,7 +1612,7 @@ function calcMontarResumoWhatsapp() {
     if (!ctx.compararDebPrivate) {
       const brutaLinha = r.isento ? `\nTaxa bruta equivalente (produto tributado): ${calcFmtPct(r.taxaBrutaEquivalentePct)} a.a.` : '';
       const liquidaLinhas = r.isento ? '' : `\nAlíquota de IR aplicada: ${calcFmtPct(r.aliquotaAplicadaPct)}\nTaxa anual líquida equivalente: ${calcFmtPct(r.iAnualLiquidoPct)} a.a.\nEquivalente mensal (líquido): ${calcFmtPct(r.taxaMensalLiquidaPct)} a.m.`;
-      texto = `Simulação\n\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nTaxa efetiva anual${r.isento ? '' : ' bruta'} (equivalente hoje): ${calcFmtPct(r.iAnualPct)} a.a.\nEquivalente mensal${r.isento ? '' : ' (bruto)'}: ${calcFmtPct(r.taxaMensalPct)} a.m.${liquidaLinhas}${brutaLinha}\n\n${CALC_NOTA_IR_METODOLOGIA_TEXTO}`;
+      texto = `Simulação\n\nIndexador: ${taxaLabel}\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\nTaxa efetiva anual${r.isento ? '' : ' bruta'} (equivalente hoje): ${calcFmtPct(r.iAnualPct)} a.a.\nEquivalente mensal${r.isento ? '' : ' (bruto)'}: ${calcFmtPct(r.taxaMensalPct)} a.m.${liquidaLinhas}${brutaLinha}`;
     } else {
       const nomeInformado = r.isento ? 'Debênture Private (isenta)' : 'Debênture (bruta)';
       const nomeEquivalente = r.isento ? 'Debênture (bruta)' : 'Debênture Private (isenta)';
@@ -1621,7 +1620,7 @@ function calcMontarResumoWhatsapp() {
       const equivalenteMensalPct = r.isento
         ? (Math.pow(1 + equivalenteAnualPct / 100, 1 / 12) - 1) * 100
         : r.taxaMensalLiquidaPct;
-      texto = `Equivalência de Debêntures\n\n${nomeInformado}\nIndexador: ${taxaLabel}\nTaxa efetiva: ${calcFmtPct(r.iAnualPct)} a.a. (${calcFmtPct(r.taxaMensalPct)} a.m.)\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\n\nEquivale, líquido, em ${nomeEquivalente}: ${calcFmtPct(equivalenteAnualPct)} a.a. (${calcFmtPct(equivalenteMensalPct)} a.m.)\n\n${CALC_NOTA_IR_METODOLOGIA_TEXTO}`;
+      texto = `Equivalência de Debêntures\n\n${nomeInformado}\nIndexador: ${taxaLabel}\nTaxa efetiva: ${calcFmtPct(r.iAnualPct)} a.a. (${calcFmtPct(r.taxaMensalPct)} a.m.)\nPrazo: ${prazoTexto}\nVencimento: ${vencimentoTexto}\n\nEquivale, líquido, em ${nomeEquivalente}: ${calcFmtPct(equivalenteAnualPct)} a.a. (${calcFmtPct(equivalenteMensalPct)} a.m.)`;
     }
   } else if (modo === 'ir') {
     texto = `Simulação de IR\n\nValor bruto: ${fmtBRL(r.valorBruto)}\nPrazo: ${prazoTexto}\nAlíquota de IR: ${r.isento ? 'Isento' : calcFmtPct(r.aliquotaPct)}\nIR: ${fmtBRL(r.ir)}\nValor líquido: ${fmtBRL(r.valorLiquido)}`;
@@ -1703,7 +1702,6 @@ function calcRenderResultado(modo, r) {
           <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.du} dias úteis</div></div>
           ${brutaHtml}
         </div>
-        <p style="font-size:10.5px; color:#5a5847; margin-top:10px;">${CALC_NOTA_IR_METODOLOGIA_TEXTO}</p>
         ${calcBotaoCopiarHtml()}`;
     } else {
       // Comparador dos 2 produtos de debênture da GCB, para qualquer indexador: parte do produto
@@ -1730,8 +1728,6 @@ function calcRenderResultado(modo, r) {
           <div class="ci"><div class="lbl">Vencimento</div><div class="val">${calcUltimoContexto.vencimentoTexto}</div></div>
           <div class="ci"><div class="lbl">Prazo</div><div class="val">${r.du} dias úteis</div></div>
         </div>
-        <p style="font-size:10.5px; color:#5a5847; margin-top:10px;">Equivalência calculada pra entregar o mesmo retorno líquido no mesmo prazo, considerando o IR já embutido em cada tipo de produto.</p>
-        <p style="font-size:10.5px; color:#5a5847; margin-top:4px;">${CALC_NOTA_IR_METODOLOGIA_TEXTO}</p>
         ${calcBotaoCopiarHtml()}`;
     }
   } else if (modo === 'ir') {
